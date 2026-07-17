@@ -1,0 +1,6 @@
+2026/07/15-12:10:40.635 2444 Reusing MANIFEST C:\xampp\htdocs\sistemaDeConsultoriaTI\perfil_robo\Default\Local Storage\leveldb/MANIFEST-000001
+2026/07/15-12:10:40.646 2444 Recovering log #65
+2026/07/15-12:10:40.647 2444 Reusing old log C:\xampp\htdocs\sistemaDeConsultoriaTI\perfil_robo\Default\Local Storage\leveldb/000065.log 
+2026/07/15-12:11:03.253 3094 Level-0 table #69: started
+2026/07/15-12:11:03.259 3094 Level-0 table #69: 26778 bytes OK
+2026/07/15-12:11:03.263 3094 Delete type=0 #65
