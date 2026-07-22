@@ -43,4 +43,3 @@ def pesquisa_kabum(busca):
       navegador.close()
 
 
-  #TODO adicionar tratamento de exceções  para caso o site nao ser acessado. escrever umam funcao main
