@@ -17,6 +17,7 @@ def pesquisa_kabum(busca):
   #   aceite = pagina.get_by_role("button", name="Aceitar")
     # if aceite:
   #       aceite.click()
+      #encontrra todos os produtos por meio dos links contendo certo texto
       lista = pagina.locator("a[href*='/produto/']").all()
       print(f' achados {len(lista)} produtos na Kabum...')
 
@@ -25,8 +26,11 @@ def pesquisa_kabum(busca):
 
 
       for produto in lista :
+        #montando o link completo para cada produto
         link = "https://www.kabum.com.br/" + produto.first.get_attribute("href")
+        #encontra o nome do produto percorendo as spans e filtrando as indesejadas
         nomes = produto.filter(has_not_text='Produto').filter(has_not_text='Selo').filter(has_not_text='Avaliação').filter(has_text='R$').locator('span').all()
+        #escolhendo apenas as spans desejaveis
         for name in range(0,len(nomes),6):
             titulo = nomes[name+1].text_content()
             preco = nomes[name+3].text_content() + nomes[name+4].text_content()
