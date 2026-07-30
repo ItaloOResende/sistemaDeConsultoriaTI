@@ -4,11 +4,12 @@ import csv
 import time
 
 
-busca = "Memoria Ram 8Gb DDR4"
-site = "https://www.pichau.com.br"
-url = f"{site}/search?q={busca.replace(' ', '%20')}"
+# busca = "Memoria Ram 8Gb DDR4"
+
 
 def pesquisa_pichau(busca):
+    site = "https://www.pichau.com.br"
+    url = f"{site}/search?q={busca.replace(' ', '%20')}"
     with Stealth().use_sync(sync_playwright()) as pw:
         
         # O stealth injeta flags e disfarces no Chromium automaticamente

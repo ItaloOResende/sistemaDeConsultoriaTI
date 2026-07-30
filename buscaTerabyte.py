@@ -3,11 +3,12 @@ import csv
 
 
 
-busca = "Memoria Ram DDR4"
-site = "https://www.terabyteshop.com.br"
-url = f"{site}/busca?str={busca.replace(' ', '%20')}"
+# busca = "Memoria Ram DDR4"
+
 
 def pesquisa_terabyte(busca):
+    site = "https://www.terabyteshop.com.br"
+    url = f"{site}/busca?str={busca.replace(' ', '%20')}"
     with sync_playwright() as pw:
         #Adiciona flags do Chromium para camuflar automação e habilitar o novo modo headless
         navegador = pw.chromium.launch(

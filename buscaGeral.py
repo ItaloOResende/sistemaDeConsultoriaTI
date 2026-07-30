@@ -7,7 +7,7 @@ import buscaTerabyte
 import buscaPichau
 import fazerTabela
 
-busca = "memoria ram ddr4"
+busca = input("informe o produto que deseja buscar:")
 f=open('preços.csv', 'a', newline='')
 writer = csv.writer(f)
 f.truncate(0)
