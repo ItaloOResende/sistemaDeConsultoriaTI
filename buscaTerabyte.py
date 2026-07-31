@@ -35,7 +35,7 @@ def pesquisa_terabyte(busca):
         )
         print(f"Acessando a Terabyte...")
         
-        itens = getItens(pagina)
+        itens = getItens(pagina,url)
 
         
 
@@ -55,7 +55,7 @@ def pesquisa_terabyte(busca):
         f.close()
         navegador.close()
 
-def getItens(pagina):
+def getItens(pagina,url):
     pagina.goto(url)
     produtos = pagina.locator(".product-item__box").filter(has_text='R$').all()
     if len(produtos) > 0:
@@ -64,6 +64,6 @@ def getItens(pagina):
     else: 
         print("tentando novamente")
 
-        return getItens(pagina)
+        return getItens(pagina,url)
     
 

@@ -27,9 +27,9 @@ def pesquisa_pichau(busca):
             locale="pt-BR"
         )
         pagina = context.new_page()
-        print(f"Acessando a Terabyte...")
+        print(f"Acessando a Pichau...")
         
-        itens = getItens(pagina)
+        itens = getItens(pagina,url)
 
         
 
@@ -49,7 +49,7 @@ def pesquisa_pichau(busca):
         # f.close()
         navegador.close()
 
-def getItens(pagina):
+def getItens(pagina,url):
     seletor_produto = '[data-cy="list-product"]'
     pagina.goto(url)
     # pagina.locator(seletor_produto).first.wait_for(state="visible", timeout=10000)
@@ -64,6 +64,6 @@ def getItens(pagina):
         print("tentando novamente")
         time.sleep(5)
 
-        return getItens(pagina)
+        return getItens(pagina,url)
     
 

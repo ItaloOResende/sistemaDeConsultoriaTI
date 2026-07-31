@@ -27,19 +27,17 @@ def pesquisa_kabum(busca):
 
       for produto in lista :
         #montando o link completo para cada produto
-        link = "https://www.kabum.com.br/" + produto.first.get_attribute("href")
+        link = f"{site}{produto.first.get_attribute("href")}"
         #encontra o nome do produto percorendo as spans e filtrando as indesejadas
-        nomes = produto.filter(has_not_text='Produto').filter(has_not_text='Selo').filter(has_not_text='Avaliação').filter(has_text='R$').locator('span').all()
-        #escolhendo apenas as spans desejaveis
-        for name in range(0,len(nomes),6):
-            titulo = nomes[name+1].text_content()
-            preco = nomes[name+3].text_content() + nomes[name+4].text_content()
-            produtofinal = (titulo.replace(",", ""), preco, link)
-            writer.writerow(produtofinal)
+        titulo = produto.locator('span[class*="break-normal h-40"]').text_content()
+        preco = produto.locator('div[class$="flex gap-4 items-center"]').locator('span').filter(has_not_text="Desconto").filter(has_not_text="R$").text_content()
+        produtofinal = (titulo.replace(",", ""), preco, link)
+        writer.writerow(produtofinal)
       f.close()
       
       
       
       navegador.close()
 
-
+if __name__ == '__main__':
+   pesquisa_kabum('memoria ddr4')
