@@ -8,7 +8,7 @@ def organiza_tabela(file_path):
     print('organizando tabela...')
 
     try:
-        df = pd.read_csv(file_path, header=None, names=['Produto', 'Preço', 'Link'])
+        df = pd.read_csv(file_path, encoding='latin1', header=None, names=['Produto', 'Preço', 'Link'])
         df["Preço"] = (
         df["Preço"]
         .astype(str)
