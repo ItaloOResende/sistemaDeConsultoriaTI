@@ -1,4 +1,5 @@
 from playwright.sync_api import sync_playwright
+from playwright_stealth import Stealth
 import csv
 
   # Limpa o conteúdo do arquivo antes de escrever novos dados

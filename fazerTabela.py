@@ -24,7 +24,7 @@ def organiza_tabela(file_path):
         dfOrdenado = df.sort_values(by='Preço', ascending=True).reset_index(drop=True)
         dfOrdenado.to_csv('Produtos Ordenados.csv', index=False)
         #print(dfOrdenado.to_string(index=False))
-        return pd.read_csv('Produtos Ordenados.csv', header=None, names=['Produto', 'Preço', 'Link'])
+        return pd.read_csv('Produtos Ordenados.csv', header=None)
     except Exception as e:
         print(f"Error reading the CSV file: {e}")
         return None
