@@ -22,7 +22,7 @@ def pesquisa_kabum(busca):
       lista = pagina.locator("a[href*='/produto/']").all()
       print(f' achados {len(lista)} produtos na Kabum...')
 
-      f=open('preços.csv', 'a', newline='')
+      f=open('preços.csv', 'a',encoding='utf-8', newline='')
       writer = csv.writer(f)
 
 

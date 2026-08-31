@@ -39,7 +39,7 @@ def pesquisa_terabyte(busca):
 
         
 
-        f=open('preços.csv', 'a', newline='')
+        f=open('preços.csv', 'a',encoding='utf-8', newline='')
         writer = csv.writer(f)
 
         for item in itens:

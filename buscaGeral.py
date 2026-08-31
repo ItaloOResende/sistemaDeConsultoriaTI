@@ -10,7 +10,6 @@ import fazerTabela
 busca = input("informe o produto que deseja buscar:")
 f=open('preços.csv', 'a', newline='')
 writer = csv.writer(f)
-c
 f.close()
 buscaAmazon.pesquisa_amazon(busca)
 buscaKabbum.pesquisa_kabum(busca)
