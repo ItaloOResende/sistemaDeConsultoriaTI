@@ -4,7 +4,7 @@ import csv
 import time
 def pesquisa_amazon(busca):
     #abrindo o arquivo CSV para escrita
-    f=open('preços.csv', 'a', newline='')
+    f=open('preços.csv', 'a', encoding='utf-8', newline='')
     writer = csv.writer(f)
 
     # usando url de pesquisa modificada para buscar o termo desejado
