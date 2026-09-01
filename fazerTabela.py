@@ -13,6 +13,7 @@ def organiza_tabela(file_path):
         df["Preço"]
         .astype(str)
         .str.replace("R$", "", regex=False)
+        .str.replace("Â", "", regex=False)
         .str.replace(".", "", regex=False)  # Remove ponto de milhar
         .str.replace(",", ".", regex=False)  # Troca vírgula por ponto decimal
         .str.strip()
@@ -26,6 +27,8 @@ def organiza_tabela(file_path):
         #print(dfOrdenado.to_string(index=False))
         return pd.read_csv('Produtos Ordenados.csv', header=None)
     except Exception as e:
-        print(f"Error reading the CSV file: {e}")
+        print(f"Ocoreru um erro ao ler o arquivo CSV: {e}")
         return None
 
+if __name__ == '__main__':
+    print(organiza_tabela('preços.csv'))

@@ -26,14 +26,18 @@ def pesquisa_kabum(busca):
       writer = csv.writer(f)
 
 
-      for produto in lista :
-        #montando o link completo para cada produto
-        link = f"{site}{produto.first.get_attribute("href")}"
-        #encontra o nome do produto percorendo as spans e filtrando as indesejadas
-        titulo = produto.locator('span[class*="break-normal h-40"]').text_content()
-        preco = produto.locator('div[class$="flex gap-4 items-center"]').locator('span').filter(has_not_text="Desconto").filter(has_not_text="R$").text_content()
-        produtofinal = (titulo.replace(",", ""), preco, link)
-        writer.writerow(produtofinal)
+      try:
+         for produto in lista :
+                 #montando o link completo para cada produto
+                 link = f"{site}{produto.first.get_attribute("href")}"
+                 #encontra o nome do produto percorendo as spans e filtrando as indesejadas
+                 titulo = produto.locator('span[class*="break-normal h-40"]').text_content()
+                 preco = produto.locator('div[class$="flex gap-4 items-center"]').locator('span').filter(has_not_text="Desconto").filter(has_not_text="R$").text_content()
+                 produtofinal = (titulo.replace(",", ""), preco, link)
+                 writer.writerow(produtofinal)
+                 pass
+         except Exception as e:
+          print(f"Ocorreu um erro ao registrar os itens da Kabum: {e}")
       f.close()
       
       

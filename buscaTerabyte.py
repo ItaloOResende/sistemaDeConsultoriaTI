@@ -35,35 +35,47 @@ def pesquisa_terabyte(busca):
         )
         print(f"Acessando a Terabyte...")
         
-        itens = getItens(pagina,url)
+        try:
+              itens = getItens(pagina,url,0)
+              pass
+        except Exception as e:
+              print(f"Ocorreu um erro ao buscar os itens na Terabyte: {e}")
 
         
 
         f=open('preços.csv', 'a',encoding='utf-8', newline='')
         writer = csv.writer(f)
 
-        for item in itens:
-            titulo = item.get_by_role("heading",level=2).text_content()
-            titulo = titulo.replace(",", "")
-            preco = item.locator(".product-item__new-price").filter(has_text='R$').text_content()
-            preco = preco[:-14]
-            link = item.get_by_role('link').first.get_attribute("href")
-            linkfull = site + link
-            produto = (titulo, preco, linkfull)
-            writer.writerow(produto)
+        try:
+            for item in itens:
+                        titulo = item.get_by_role("heading",level=2).text_content()
+                        titulo = titulo.replace(",", "")
+                        preco = item.locator(".product-item__new-price").filter(has_text='R$').text_content()
+                        preco = preco[:-14]
+                        link = item.get_by_role('link').first.get_attribute("href")
+                        linkfull = site + link
+                        produto = (titulo, preco, linkfull)
+                        writer.writerow(produto)
+                        pass
+        except Exception as e:
+                print(f"Ocorreu um erro ao registrar os itens da Terabyte: {e}")
             
         f.close()
         navegador.close()
 
-def getItens(pagina,url):
-    pagina.goto(url)
-    produtos = pagina.locator(".product-item__box").filter(has_text='R$').all()
-    if len(produtos) > 0:
-        print(f"encontrados {len(produtos)} itens")
-        return produtos
-    else: 
-        print("tentando novamente")
+def getItens(pagina,url,tentativas):
+    tentativas += 1
+    if tentativas == 5:
+        return 0
+    else:
+        pagina.goto(url)
+        produtos = pagina.locator(".product-item__box").filter(has_text='R$').all()
+        if len(produtos) > 0:
+            print(f"encontrados {len(produtos)} itens")
+            return produtos
+        else: 
+                print("tentando novamente")
 
-        return getItens(pagina,url)
+                return getItens(pagina,url,tentativas)
     
 
