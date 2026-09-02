@@ -36,8 +36,8 @@ def pesquisa_kabum(busca):
                  produtofinal = (titulo.replace(",", ""), preco, link)
                  writer.writerow(produtofinal)
                  pass
-         except Exception as e:
-          print(f"Ocorreu um erro ao registrar os itens da Kabum: {e}")
+      except Exception as e:
+        print(f"Ocorreu um erro ao registrar os itens da Kabum: {e}")
       f.close()
       
       
