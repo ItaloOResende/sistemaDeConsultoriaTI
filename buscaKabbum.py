@@ -37,7 +37,11 @@ def pesquisa_kabum(busca):
                  writer.writerow(produtofinal)
                  pass
       except Exception as e:
+<<<<<<< HEAD
           print(f"Ocorreu um erro ao registrar os itens da Kabum: {e}")
+=======
+        print(f"Ocorreu um erro ao registrar os itens da Kabum: {e}")
+>>>>>>> 1064bbd12fd98d2060a6eefa8fbb06bbebe2b717
       f.close()
       
       
