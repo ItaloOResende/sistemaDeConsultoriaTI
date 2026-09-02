@@ -1,2 +1,5 @@
 preços.csv
 Produtos Ordenados.csv
+perfil_robo/ 
+__pycache__/
+*.pyc
