@@ -28,20 +28,16 @@ def pesquisa_kabum(busca):
 
       try:
          for produto in lista :
-                 #montando o link completo para cada produto
-                 link = f"{site}{produto.first.get_attribute("href")}"
-                 #encontra o nome do produto percorendo as spans e filtrando as indesejadas
-                 titulo = produto.locator('span[class*="break-normal h-40"]').text_content()
-                 preco = produto.locator('div[class$="flex gap-4 items-center"]').locator('span').filter(has_not_text="Desconto").filter(has_not_text="R$").text_content()
-                 produtofinal = (titulo.replace(",", ""), preco, link)
-                 writer.writerow(produtofinal)
-                 pass
+            #montando o link completo para cada produto
+            link = f"{site}{produto.first.get_attribute("href")}"
+            #encontra o nome do produto percorendo as spans e filtrando as indesejadas
+            titulo = produto.locator('span[class*="break-normal h-40"]').text_content()
+            preco = produto.locator('div[class$="flex gap-4 items-center"]').locator('span').filter(has_not_text="Desconto").filter(has_not_text="R$").text_content()
+            produtofinal = (titulo.replace(",", ""), preco, link)
+            writer.writerow(produtofinal)
+            pass
       except Exception as e:
-<<<<<<< HEAD
-          print(f"Ocorreu um erro ao registrar os itens da Kabum: {e}")
-=======
         print(f"Ocorreu um erro ao registrar os itens da Kabum: {e}")
->>>>>>> 1064bbd12fd98d2060a6eefa8fbb06bbebe2b717
       f.close()
       
       

@@ -4,6 +4,7 @@ import buscaAmazon
 import buscaKabbum
 import buscaTerabyte
 import fazerTabela
+import filtrarTabela
 
 # Se passar o termo por parâmetro do terminal/PHP, usa ele; senão pede o input
 if len(sys.argv) > 1:
@@ -31,6 +32,10 @@ except Exception as e:
     print(f"Erro Terabyte: {e}")
 
 try:
-    fazerTabela.fazer_tabela()
+    buscaKabbum.pesquisa_kabum(busca)
+except Exception as e:
+    print(f"Erro Kabum: {e}")
+try:
+   fazerTabela.prepara_tabela('preços.csv')
 except Exception as e:
     print(f"Erro ao gerar tabela: {e}")

@@ -4,8 +4,8 @@ pd.set_option('display.max_columns', None)
 pd.set_option('display.max_rows', None)
 pd.set_option('display.width', None)
 
-def organiza_tabela(file_path):
-    print('organizando tabela...')
+def prepara_tabela(file_path):
+    print('preparando tabela...')
 
     try:
         df = pd.read_csv(file_path, encoding='latin1', header=None, names=['Produto', 'Preço', 'Link'])
@@ -23,12 +23,13 @@ def organiza_tabela(file_path):
 
         df["Preço"] = pd.to_numeric(df["Preço"])
         dfOrdenado = df.sort_values(by='Preço', ascending=True).reset_index(drop=True)
-        dfOrdenado.to_csv('Produtos Ordenados.csv', index=False)
+        dfFiltrado = dfOrdenado[dfOrdenado['Produto'].str.contains('ddr4', case=False, na=False)]
+        dfFiltrado.to_csv('Produtos Ordenados.csv', index=False)
         #print(dfOrdenado.to_string(index=False))
         return pd.read_csv('Produtos Ordenados.csv', header=None)
     except Exception as e:
-        print(f"Ocoreru um erro ao ler o arquivo CSV: {e}")
+        print(f"Ocoreru um erro a organizar o arquivo CSV: {e}")
         return None
 
 if __name__ == '__main__':
-    print(organiza_tabela('preços.csv'))
+    print(prepara_tabela('preços.csv'))
