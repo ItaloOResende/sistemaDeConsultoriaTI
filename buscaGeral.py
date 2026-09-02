@@ -39,3 +39,9 @@ try:
    fazerTabela.prepara_tabela('preços.csv')
 except Exception as e:
     print(f"Erro ao gerar tabela: {e}")
+
+try:
+    filtrarTabela.filtrar_memoria_desktop('Produtos Ordenados.csv', phtipo, phmemoria)
+    pass
+except Exception as e:
+    print(f"Ocorreu um erro  ao filtrar tabela: {e}")
