@@ -6,8 +6,20 @@ $totalSoma = 0.0;
 $erroTerminal = '';
 
 function converterPrecoParaFloat($precoStr) {
-    $limpo = preg_replace('/[^\d,]/', '', $precoStr);
-    $limpo = str_replace(',', '.', $limpo);
+    // Remove R$, espaços e caracteres estranhos
+    $limpo = preg_replace('/[^\d,\.]/', '', $precoStr);
+
+    // Se tiver vírgula e ponto (ex: 1.250,90), tira o ponto de milhar e troca vírgula por ponto
+    if (strpos($limpo, ',') !== false && strpos($limpo, '.') !== false) {
+        $limpo = str_replace('.', '', $limpo);
+        $limpo = str_replace(',', '.', $limpo);
+    } 
+    // Se só tiver vírgula (ex: 379,99), troca por ponto
+    elseif (strpos($limpo, ',') !== false) {
+        $limpo = str_replace(',', '.', $limpo);
+    }
+    // Se já estiver com ponto (ex: 379.99), mantém como está
+
     return floatval($limpo);
 }
 
@@ -28,11 +40,12 @@ function identificarLoja($url) {
 $perfilBusca = $_GET['perfil_busca'] ?? 'barato';
 $modoSetup = isset($_GET['montar_setup']) && $_GET['montar_setup'] === '1';
 
-// 1. Processador
+// 1. Processador (Marca -> Linha -> Geração -> Vídeo Integrado)
 $termoCpu = '';
 $cpuMarca = $_GET['cpu_marca'] ?? '';
 $cpuLinha = $_GET['cpu_linha'] ?? '';
 $cpuGen   = $_GET['cpu_gen'] ?? '';
+$cpuVideo = $_GET['video_integrado'] ?? '';
 
 if (!empty($cpuMarca)) {
     $termoCpu = "processador " . $cpuMarca;
@@ -41,6 +54,17 @@ if (!empty($cpuMarca)) {
         $termoCpu .= " " . $cpuGen;
     } elseif ($perfilBusca === 'desempenho') {
         $termoCpu .= ($cpuMarca === 'intel') ? ' 14ª geracao' : ' 7000';
+    }
+
+    // Refinamento por sufixo de vídeo integrado
+    if ($cpuVideo === 'sim') {
+        if ($cpuMarca === 'amd') {
+            $termoCpu .= " g"; // Ex: Ryzen 5 5600G
+        }
+    } elseif ($cpuVideo === 'nao') {
+        if ($cpuMarca === 'intel') {
+            $termoCpu .= " f"; // Modelos F da Intel não possuem iGPU e são mais baratos
+        }
     }
 }
 
@@ -134,7 +158,7 @@ if ($modoSetup) {
     }
 }
 
-// 6. Execução dos scripts Python
+// 6. Execução dos scripts Python e seleção do menor preço
 if (!empty($pecasParaCotar)) {
     $raiz_projeto = dirname(__DIR__);
 
@@ -181,19 +205,22 @@ if (!empty($pecasParaCotar)) {
             usort($itensDestaPeca, function ($a, $b) use ($perfilBusca) {
                 return ($perfilBusca === 'desempenho') ? ($b['precoNum'] <=> $a['precoNum']) : ($a['precoNum'] <=> $b['precoNum']);
             });
+
+            // Extrai estritamente o item vencedor (mais barato)
+            $melhorOpcao = !empty($itensDestaPeca) ? $itensDestaPeca[0] : null;
+
+            if ($melhorOpcao) {
+                $totalSoma += $melhorOpcao['precoNum'];
+            }
+
+            $resultadosPorPeca[$chave] = [
+                'rotulo' => $rotulo,
+                'termo'  => $termo,
+                'item'   => $melhorOpcao
+            ];
         } else {
             $erroTerminal .= "Falha na busca de [$rotulo]: " . ($output ?: "Nenhum dado retornado") . "\n";
         }
-
-        if (!empty($itensDestaPeca)) {
-            $totalSoma += $itensDestaPeca[0]['precoNum'];
-        }
-
-        $resultadosPorPeca[$chave] = [
-            'rotulo' => $rotulo,
-            'termo'  => $termo,
-            'itens'  => $itensDestaPeca
-        ];
     }
 }
 ?>
@@ -239,7 +266,6 @@ if (!empty($pecasParaCotar)) {
             align-items: flex-start;
         }
 
-        /* SIDEBAR FIXA (ESQUERDA) */
         .sidebar {
             width: 380px;
             min-width: 380px;
@@ -308,7 +334,6 @@ if (!empty($pecasParaCotar)) {
             accent-color: var(--primary);
         }
 
-        /* ACCORDIONS (SANFONAS) */
         .accordion-group {
             display: flex;
             flex-direction: column;
@@ -415,7 +440,6 @@ if (!empty($pecasParaCotar)) {
             background: var(--primary-hover);
         }
 
-        /* ÁREA DE RESULTADOS (DIREITA) */
         .main-content {
             flex: 1;
             display: flex;
@@ -454,27 +478,15 @@ if (!empty($pecasParaCotar)) {
             background-color: var(--bg-card);
             border: 1px solid var(--border);
             border-radius: 12px;
-            padding: 1.5rem;
+            padding: 1.25rem 1.5rem;
         }
 
-        .categoria-header {
-            display: flex;
-            justify-content: space-between;
-            align-items: center;
-            border-bottom: 1px solid var(--border);
-            padding-bottom: 0.75rem;
-            margin-bottom: 1.2rem;
-        }
-
-        .categoria-header h3 {
-            font-size: 1.15rem;
-            color: var(--primary);
-        }
-
-        .product-grid {
-            display: flex;
-            flex-direction: column;
-            gap: 0.75rem;
+        .categoria-label {
+            font-size: 0.8rem;
+            text-transform: uppercase;
+            color: var(--text-muted);
+            font-weight: 700;
+            margin-bottom: 0.6rem;
         }
 
         .product-card {
@@ -569,50 +581,72 @@ if (!empty($pecasParaCotar)) {
 
             <div class="accordion-group">
                 
-                <!-- 1. Processador -->
+                <!-- 1. Processador (Marca -> Linha -> Geração -> Vídeo Integrado no Final) -->
                 <div class="accordion-item">
                     <button type="button" class="accordion-btn" onclick="toggleAccordion(this)">
                         <span>🧠 Processador</span>
                         <span class="seta">▼</span>
                     </button>
                     <div class="accordion-content">
+                        <!-- Nível 1: Marca -->
                         <select name="cpu_marca" id="cpu_marca" class="seletor-peca">
-                            <option value="">Ignorar / Não incluir</option>
+                            <option value="">Marca (Selecionar)</option>
                             <option value="intel" <?= ($cpuMarca == 'intel') ? 'selected' : '' ?>>Intel Core</option>
                             <option value="amd" <?= ($cpuMarca == 'amd') ? 'selected' : '' ?>>AMD Ryzen</option>
                         </select>
+                        
+                        <!-- Nível 2: Linha -->
                         <select name="cpu_linha" id="cpu_linha">
-                            <option value="">Qualquer Linha...</option>
+                            <option value="">Linha (Selecionar)</option>
                         </select>
+                        
+                        <!-- Nível 3: Geração -->
                         <select name="cpu_gen" id="cpu_gen">
-                            <option value="">Qualquer Geração...</option>
+                            <option value="">Geração (Selecionar)</option>
+                        </select>
+
+                        <!-- Nível 4: Vídeo Integrado (Última opção) -->
+                        <select name="video_integrado" id="video_integrado">
+                            <option value="">Vídeo Integrado (Selecionar)</option>
+                            <option value="sim" <?= ($cpuVideo == 'sim') ? 'selected' : '' ?>>Com Vídeo Integrado</option>
+                            <option value="nao" <?= ($cpuVideo == 'nao') ? 'selected' : '' ?>>Sem Vídeo Integrado</option>
                         </select>
                     </div>
                 </div>
 
-                <!-- 2. Memória RAM (Capacidade primeiro, DDR depois) -->
+                <!-- 2. Memória RAM -->
                 <div class="accordion-item">
                     <button type="button" class="accordion-btn" onclick="toggleAccordion(this)">
                         <span>⚡ Memória RAM</span>
                         <span class="seta">▼</span>
                     </button>
-                    <div class="accordion-content">
-                        <select name="ram_cap" id="ram_cap" class="seletor-peca">
-                            <option value="">Ignorar / Não incluir</option>
-                            <option value="4gb" <?= ($ramCap == '4gb') ? 'selected' : '' ?>>4GB</option>
-                            <option value="8gb" <?= ($ramCap == '8gb') ? 'selected' : '' ?>>8GB</option>
-                            <option value="16gb" <?= ($ramCap == '16gb') ? 'selected' : '' ?>>16GB</option>
-                            <option value="32gb" <?= ($ramCap == '32gb') ? 'selected' : '' ?>>32GB</option>
-                            <option value="64gb" <?= ($ramCap == '64gb') ? 'selected' : '' ?>>64GB</option>
-                        </select>
-                        <select name="ram_ddr" id="ram_ddr" class="seletor-peca">
-                            <option value="">Qualquer Padrão DDR...</option>
-                            <option value="ddr3" <?= ($ramDdr == 'ddr3') ? 'selected' : '' ?>>DDR3</option>
-                            <option value="ddr4" <?= ($ramDdr == 'ddr4') ? 'selected' : '' ?>>DDR4</option>
-                            <option value="ddr5" <?= ($ramDdr == 'ddr5') ? 'selected' : '' ?>>DDR5</option>
-                        </select>
-                    </div>
+                <div class="accordion-content">
+                    <!-- Tipo de Computador -->
+                    <select name="ram_tipo" id="ram_tipo" class="seletor-peca">
+                        <option value="">Equipamento (Selecionar)</option>
+                        <option value="desktop" <?= (($_GET['ram_tipo'] ?? '') == 'desktop') ? 'selected' : '' ?>>Desktop (PC de Mesa)</option>
+                        <option value="notebook" <?= (($_GET['ram_tipo'] ?? '') == 'notebook') ? 'selected' : '' ?>>Notebook (SODIMM)</option>
+                    </select>
+
+                    <!-- Capacidade -->
+                    <select name="ram_cap" id="ram_cap" class="seletor-peca">
+                        <option value="">Capacidade (Ignorar)</option>
+                        <option value="4gb" <?= (($ramCap ?? '') == '4gb') ? 'selected' : '' ?>>4GB</option>
+                        <option value="8gb" <?= (($ramCap ?? '') == '8gb') ? 'selected' : '' ?>>8GB</option>
+                        <option value="16gb" <?= (($ramCap ?? '') == '16gb') ? 'selected' : '' ?>>16GB</option>
+                        <option value="32gb" <?= (($ramCap ?? '') == '32gb') ? 'selected' : '' ?>>32GB</option>
+                        <option value="64gb" <?= (($ramCap ?? '') == '64gb') ? 'selected' : '' ?>>64GB</option>
+                    </select>
+
+                    <!-- Padrão DDR -->
+                    <select name="ram_ddr" id="ram_ddr" class="seletor-peca">
+                        <option value="">Qualquer Padrão DDR...</option>
+                        <option value="ddr3" <?= (($ramDdr ?? '') == 'ddr3') ? 'selected' : '' ?>>DDR3</option>
+                        <option value="ddr4" <?= (($ramDdr ?? '') == 'ddr4') ? 'selected' : '' ?>>DDR4</option>
+                        <option value="ddr5" <?= (($ramDdr ?? '') == 'ddr5') ? 'selected' : '' ?>>DDR5</option>
+                    </select>
                 </div>
+            </div>
 
                 <!-- 3. Armazenamento -->
                 <div class="accordion-item">
@@ -622,13 +656,16 @@ if (!empty($pecasParaCotar)) {
                     </button>
                     <div class="accordion-content">
                         <select name="disco_tipo" id="disco_tipo" class="seletor-peca">
-                            <option value="">Ignorar / Não incluir</option>
-                            <option value="ssd nvme" <?= ($discoTipo == 'ssd nvme') ? 'selected' : '' ?>>SSD NVMe M.2</option>
-                            <option value="ssd sata" <?= ($discoTipo == 'ssd sata') ? 'selected' : '' ?>>SSD SATA III</option>
-                            <option value="hd interno" <?= ($discoTipo == 'hd interno') ? 'selected' : '' ?>>HD Mecânico</option>
+                            <option value="">Tipo (Ignorar)</option>
+                            <option value="M.2 NVMe" <?= ($discoTipo == 'M.2 NVMe') ? 'selected' : '' ?>>M.2 NVMe</option>
+                            <option value="M.2 SATA" <?= ($discoTipo == 'M.2 SATA') ? 'selected' : '' ?>>M.2 SATA </option>
+                            <option value="ssd sata" <?= ($discoTipo == 'ssd sata') ? 'selected' : '' ?>>SSD SATA</option>
+                            <option value="hd PC" <?= ($discoTipo == 'hd PC') ? 'selected' : '' ?>>HD PC</option>
+                            <option value="hd notebook" <?= ($discoTipo == 'hd notebook') ? 'selected' : '' ?>>HD notebook</option>
                         </select>
                         <select name="disco_cap" id="disco_cap" class="seletor-peca">
-                            <option value="">Qualquer Capacidade...</option>
+                            <option value="">Capacidade (Selecionar)</option>
+                            <option value="120gb" <?= ($discoCap == '120gb') ? 'selected' : '' ?>>120GB</option>
                             <option value="240gb" <?= ($discoCap == '240gb') ? 'selected' : '' ?>>240GB / 256GB</option>
                             <option value="480gb" <?= ($discoCap == '480gb') ? 'selected' : '' ?>>480GB / 512GB</option>
                             <option value="1tb" <?= ($discoCap == '1tb') ? 'selected' : '' ?>>1TB</option>
@@ -638,7 +675,7 @@ if (!empty($pecasParaCotar)) {
                     </div>
                 </div>
 
-                <!-- 4. Placa de Vídeo (3 Níveis) -->
+                <!-- 4. Placa de Vídeo -->
                 <div class="accordion-item">
                     <button type="button" class="accordion-btn" onclick="toggleAccordion(this)">
                         <span>🎮 Placa de Vídeo</span>
@@ -646,7 +683,7 @@ if (!empty($pecasParaCotar)) {
                     </button>
                     <div class="accordion-content">
                         <select name="gpu_marca" id="gpu_marca" class="seletor-peca">
-                            <option value="">Ignorar / Sem Placa</option>
+                            <option value="">Marca (Sem Placa)</option>
                             <option value="nvidia" <?= ($gpuMarca == 'nvidia') ? 'selected' : '' ?>>NVIDIA GeForce</option>
                             <option value="amd" <?= ($gpuMarca == 'amd') ? 'selected' : '' ?>>AMD Radeon</option>
                         </select>
@@ -670,7 +707,7 @@ if (!empty($pecasParaCotar)) {
         </form>
     </aside>
 
-    <!-- ÁREA PRINCIPAL (RESULTADOS) -->
+    <!-- ÁREA PRINCIPAL (RESULTADOS VENCEDORES) -->
     <main class="main-content">
         
         <?php if (!empty($erroTerminal)): ?>
@@ -678,14 +715,14 @@ if (!empty($pecasParaCotar)) {
         <?php endif; ?>
 
         <!-- Banner Consolidado de Soma -->
-        <?php if (count($resultadosPorPeca) > 1 && $totalSoma > 0): ?>
+        <?php if ($totalSoma > 0): ?>
             <div class="summary-banner">
                 <div>
                     <div class="summary-title">
-                        <?= $modoSetup ? 'Orçamento Estimado da Máquina Completa' : 'Valor Total dos Componentes Selecionados' ?>
+                        <?= $modoSetup ? 'Orçamento Estimado da Máquina Completa' : (count($resultadosPorPeca) > 1 ? 'Valor Total das Peças Selecionadas' : 'Melhor Oferta Encontrada') ?>
                     </div>
                     <div class="summary-subtitle">
-                        <?= $modoSetup ? 'Inclui Processador, Placa-Mãe, RAM, Armazenamento, Fonte e Gabinete mais em conta.' : 'Soma calculada com a melhor opção de cada item marcado.' ?>
+                        Soma automática com o melhor valor unitário de cada componente.
                     </div>
                 </div>
                 <div class="summary-price">
@@ -694,36 +731,33 @@ if (!empty($pecasParaCotar)) {
             </div>
         <?php endif; ?>
 
-        <!-- Listas de Resultados -->
+        <!-- Exibe estritamente 1 card por componente pesquisado -->
         <?php if (!empty($resultadosPorPeca)): ?>
             <?php foreach ($resultadosPorPeca as $chave => $dados): ?>
-                <section class="categoria-bloco">
-                    <div class="categoria-header">
-                        <h3><?= htmlspecialchars($dados['rotulo']) ?> — <span style="font-size:0.9rem; color:var(--text-muted); font-weight:normal;">Busca: "<?= htmlspecialchars($dados['termo']) ?>"</span></h3>
-                        <span><?= count($dados['itens']) ?> ofertas encontradas</span>
+                <?php if (!empty($dados['item'])): 
+                    $item = $dados['item'];
+                ?>
+                    <div class="categoria-bloco">
+                        <div class="categoria-label">
+                            <?= htmlspecialchars($dados['rotulo']) ?> — Termo: "<?= htmlspecialchars($dados['termo']) ?>"
+                        </div>
+                        
+                        <a href="<?= htmlspecialchars($item['link']) ?>" target="_blank" class="product-card">
+                            <div class="product-info">
+                                <div class="product-title"><?= htmlspecialchars($item['titulo']) ?></div>
+                                <div class="product-price"><?= htmlspecialchars($item['precoTexto']) ?></div>
+                            </div>
+                            <div class="loja-badge <?= $item['loja']['tag_class'] ?>">
+                                <span><?= $item['loja']['icone'] ?></span>
+                                <span><?= $item['loja']['nome'] ?></span>
+                            </div>
+                        </a>
                     </div>
-
-                    <?php if (!empty($dados['itens'])): ?>
-                        <div class="product-grid">
-                            <?php foreach ($dados['itens'] as $item): ?>
-                                <a href="<?= htmlspecialchars($item['link']) ?>" target="_blank" class="product-card">
-                                    <div class="product-info">
-                                        <div class="product-title"><?= htmlspecialchars($item['titulo']) ?></div>
-                                        <div class="product-price"><?= htmlspecialchars($item['precoTexto']) ?></div>
-                                    </div>
-                                    <div class="loja-badge <?= $item['loja']['tag_class'] ?>">
-                                        <span><?= $item['loja']['icone'] ?></span>
-                                        <span><?= $item['loja']['nome'] ?></span>
-                                    </div>
-                                </a>
-                            <?php endforeach; ?>
-                        </div>
-                    <?php else: ?>
-                        <div style="color:var(--text-muted); text-align:center; padding:1.5rem;">
-                            Nenhum resultado registrado para esta categoria.
-                        </div>
-                    <?php endif; ?>
-                </section>
+                <?php else: ?>
+                    <div class="categoria-bloco" style="color:var(--text-muted);">
+                        Nenhum produto válido encontrado para <b><?= htmlspecialchars($dados['rotulo']) ?></b>.
+                    </div>
+                <?php endif; ?>
             <?php endforeach; ?>
         <?php else: ?>
             <div class="empty-placeholder">
@@ -771,50 +805,111 @@ const dadosCpu = {
     }
 };
 
-// Dados para GPU em 3 Níveis
+// Dados completos para GPU
 const dadosGpu = {
     nvidia: {
         series: [
-            { val: "gtx", label: "Série GTX (Entrada)" },
-            { val: "rtx 30", label: "Série RTX 30" },
-            { val: "rtx 40", label: "Série RTX 40 (Atual)" }
+            { val: "gtx", label: "Série GTX (Entrada / Reposição)" },
+            { val: "rtx 20", label: "Série RTX 20 (Legado)" },
+            { val: "rtx 30", label: "Série RTX 30 (Custo-Benefício)" },
+            { val: "rtx 40", label: "Série RTX 40 (Geração Recente)" },
+            { val: "rtx 50", label: "Série RTX 50 (Nova Geração / Topo)" }
         ],
         modelos: {
             gtx: [
-                { val: "gtx 1650", label: "GTX 1650 4GB" }
+                { val: "gtx 1650", label: "GTX 1650 4GB" },
+                { val: "gtx 1660", label: "GTX 1660 6GB" },
+                { val: "gtx 1660 super", label: "GTX 1660 Super 6GB" },
+                { val: "gtx 1660 ti", label: "GTX 1660 Ti 6GB" }
+            ],
+            "rtx 20": [
+                { val: "rtx 2060", label: "RTX 2060 6GB/12GB" },
+                { val: "rtx 2060 super", label: "RTX 2060 Super 8GB" }
             ],
             "rtx 30": [
                 { val: "rtx 3050", label: "RTX 3050 6GB/8GB" },
                 { val: "rtx 3060", label: "RTX 3060 12GB" },
-                { val: "rtx 3060 ti", label: "RTX 3060 Ti" }
+                { val: "rtx 3060 ti", label: "RTX 3060 Ti 8GB" },
+                { val: "rtx 3070", label: "RTX 3070 8GB" },
+                { val: "rtx 3070 ti", label: "RTX 3070 Ti 8GB" },
+                { val: "rtx 3080", label: "RTX 3080 10GB/12GB" },
+                { val: "rtx 3090", label: "RTX 3090 24GB" }
             ],
             "rtx 40": [
                 { val: "rtx 4060", label: "RTX 4060 8GB" },
-                { val: "rtx 4060 ti", label: "RTX 4060 Ti" },
+                { val: "rtx 4060 ti", label: "RTX 4060 Ti 8GB" },
+                { val: "rtx 4060 ti 16gb", label: "RTX 4060 Ti 16GB" },
                 { val: "rtx 4070", label: "RTX 4070 12GB" },
-                { val: "rtx 4070 super", label: "RTX 4070 Super" }
+                { val: "rtx 4070 super", label: "RTX 4070 Super 12GB" },
+                { val: "rtx 4070 ti", label: "RTX 4070 Ti 12GB" },
+                { val: "rtx 4070 ti super", label: "RTX 4070 Ti Super 16GB" },
+                { val: "rtx 4080", label: "RTX 4080 16GB" },
+                { val: "rtx 4080 super", label: "RTX 4080 Super 16GB" },
+                { val: "rtx 4090", label: "RTX 4090 24GB" }
+            ],
+            "rtx 50": [
+                { val: "rtx 5070", label: "RTX 5070 12GB" },
+                { val: "rtx 5070 ti", label: "RTX 5070 Ti 16GB" },
+                { val: "rtx 5080", label: "RTX 5080 16GB" },
+                { val: "rtx 5090", label: "RTX 5090 32GB" }
             ]
         }
     },
     amd: {
         series: [
-            { val: "rx 500", label: "Série RX 500 (Básica)" },
+            { val: "rx 500", label: "Série RX 500 (Básica / Usada)" },
             { val: "rx 6000", label: "Série RX 6000 (Custo-Benefício)" },
-            { val: "rx 7000", label: "Série RX 7000 (Atual)" }
+            { val: "rx 7000", label: "Série RX 7000 (Geração Atual)" },
+            { val: "rx 8000", label: "Série RX 8000 (Nova Geração)" }
         ],
         modelos: {
             "rx 500": [
-                { val: "rx 580", label: "RX 580 8GB" }
+                { val: "rx 550", label: "RX 550 4GB" },
+                { val: "rx 580", label: "RX 580 8GB" },
+                { val: "rx 590", label: "RX 590 8GB" }
             ],
             "rx 6000": [
+                { val: "rx 6400", label: "RX 6400 4GB" },
+                { val: "rx 6500 xt", label: "RX 6500 XT 4GB" },
                 { val: "rx 6600", label: "RX 6600 8GB" },
-                { val: "rx 6650 xt", label: "RX 6650 XT" },
-                { val: "rx 6750 xt", label: "RX 6750 XT 12GB" }
+                { val: "rx 6600 xt", label: "RX 6600 XT 8GB" },
+                { val: "rx 6650 xt", label: "RX 6650 XT 8GB" },
+                { val: "rx 6700 xt", label: "RX 6700 XT 12GB" },
+                { val: "rx 6750 xt", label: "RX 6750 XT 12GB" },
+                { val: "rx 6800 xt", label: "RX 6800 XT 16GB" },
+                { val: "rx 6900 xt", label: "RX 6900 XT 16GB" }
             ],
             "rx 7000": [
                 { val: "rx 7600", label: "RX 7600 8GB" },
+                { val: "rx 7600 xt", label: "RX 7600 XT 16GB" },
                 { val: "rx 7700 xt", label: "RX 7700 XT 12GB" },
-                { val: "rx 7800 xt", label: "RX 7800 XT 16GB" }
+                { val: "rx 7800 xt", label: "RX 7800 XT 16GB" },
+                { val: "rx 7900 gre", label: "RX 7900 GRE 16GB" },
+                { val: "rx 7900 xt", label: "RX 7900 XT 20GB" },
+                { val: "rx 7900 xtx", label: "RX 7900 XTX 24GB" }
+            ],
+            "rx 8000": [
+                { val: "rx 8600 xt", label: "RX 8600 XT" },
+                { val: "rx 8700 xt", label: "RX 8700 XT" },
+                { val: "rx 8800 xt", label: "RX 8800 XT" }
+            ]
+        }
+    },
+    intel: {
+        series: [
+            { val: "arc a", label: "Intel Arc Série A (1ª Geração)" },
+            { val: "arc b", label: "Intel Arc Battlemage (Nova Geração)" }
+        ],
+        modelos: {
+            "arc a": [
+                { val: "arc a380", label: "Arc A380 6GB" },
+                { val: "arc a580", label: "Arc A580 8GB" },
+                { val: "arc a750", label: "Arc A750 8GB" },
+                { val: "arc a770", label: "Arc A770 16GB" }
+            ],
+            "arc b": [
+                { val: "arc b570", label: "Arc B570 10GB" },
+                { val: "arc b580", label: "Arc B580 12GB" }
             ]
         }
     }
@@ -833,8 +928,8 @@ const selectCpuGen   = document.getElementById('cpu_gen');
 
 function atualizarCpu(linhaSel, genSel) {
     const marca = selectCpuMarca.value;
-    selectCpuLinha.innerHTML = '<option value="">Qualquer Linha...</option>';
-    selectCpuGen.innerHTML = '<option value="">Qualquer Geração...</option>';
+    selectCpuLinha.innerHTML = '<option value="">Linha (Selecionar)</option>';
+    selectCpuGen.innerHTML = '<option value="">Geração (Selecionar)</option>';
 
     if (dadosCpu[marca]) {
         dadosCpu[marca].linhas.forEach(l => {
@@ -896,22 +991,13 @@ function atualizarGpuModelos(serie, modeloSel) {
 selectGpuMarca.addEventListener('change', () => atualizarGpuSeries(null, null));
 selectGpuSerie.addEventListener('change', (e) => atualizarGpuModelos(e.target.value, null));
 
-// Auto-check setup completo se marcou mais de 1 peça
+// Auto-check setup completo
 const checkboxSetup = document.getElementById('montarSetupCheckbox');
 const seletores = document.querySelectorAll('.seletor-peca');
 
-function checarMultiplos() {
-    let preenchidos = 0;
-    seletores.forEach(s => {
-        if (s.value !== '') preenchidos++;
-    });
-    if (preenchidos > 1) {
-        checkboxSetup.checked = true;
-    }
-}
 seletores.forEach(s => s.addEventListener('change', checarMultiplos));
 
-// Abre automaticamente as sanfonas que já possuem seleções ativas vindas da URL
+// Mantém as sanfonas e selects preenchidos após o submit
 document.addEventListener('DOMContentLoaded', () => {
     const urlParams = new URLSearchParams(window.location.search);
     
