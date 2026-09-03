@@ -23,13 +23,12 @@ def prepara_tabela(file_path):
 
         df["Preço"] = pd.to_numeric(df["Preço"])
         dfOrdenado = df.sort_values(by='Preço', ascending=True).reset_index(drop=True)
-        dfFiltrado = dfOrdenado[dfOrdenado['Produto'].str.contains('ddr4', case=False, na=False)]
-        dfFiltrado.to_csv('Produtos Ordenados.csv', index=False)
+        dfOrdenado.to_csv('csvs/Produtos Ordenados.csv', index=False)
         #print(dfOrdenado.to_string(index=False))
-        return pd.read_csv('Produtos Ordenados.csv', header=None)
+        return pd.read_csv('csvs/Produtos Ordenados.csv', header=None)
     except Exception as e:
         print(f"Ocoreru um erro a organizar o arquivo CSV: {e}")
         return None
 
 if __name__ == '__main__':
-    print(prepara_tabela('preços.csv'))
+    print(prepara_tabela('csvs/preços.csv'))

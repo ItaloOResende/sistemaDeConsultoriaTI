@@ -7,7 +7,8 @@ import time
 
 def pesquisa_amazon(busca):
     #abrindo o arquivo CSV para escrita
-    f=open('preços.csv', 'a', encoding='utf-8', newline='')
+    arquivo = "csvs/preços.csv"
+    f=open(arquivo, 'a', encoding='utf-8', newline='')
     writer = csv.writer(f)
     site = "https://www.amazon.com.br"
     url = f"{site}/s?k={busca.replace(' ', '+')}"

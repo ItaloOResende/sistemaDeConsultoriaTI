@@ -12,6 +12,7 @@ import time
 def pesquisa_pichau(busca):
     site = "https://www.pichau.com.br"
     url = f"{site}/search?q={busca.replace(' ', '%20')}"
+    arquivo = "csvs/preços.csv"
     with Stealth().use_sync(sync_playwright()) as pw:
         
         # O stealth injeta flags e disfarces no Chromium automaticamente
@@ -40,7 +41,7 @@ def pesquisa_pichau(busca):
 
         
 
-        f=open('preços.csv', 'a',encoding='utf-8', newline='')
+        f=open(arquivo, 'a',encoding='utf-8', newline='')
         writer = csv.writer(f)
 
         try:

@@ -1,9 +1,9 @@
-preços.csv
-Produtos Ordenados.csv
-memoria_ddr4_16gb.csv
+
 perfil_robo/ 
 __pycache__/
 *.pyc
 memoria_ddr4_16gb.csv
 buscaGeral.py
 .gitignore
+csvs/*
+preços.csv

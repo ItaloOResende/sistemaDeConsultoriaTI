@@ -9,6 +9,7 @@ import csv
 def pesquisa_terabyte(busca):
     site = "https://www.terabyteshop.com.br"
     url = f"{site}/busca?str={busca.replace(' ', '%20')}"
+    arquivo = "csvs/preços.csv"
     with sync_playwright() as pw:
         #Adiciona flags do Chromium para camuflar automação e habilitar o novo modo headless
         navegador = pw.chromium.launch(
@@ -43,7 +44,7 @@ def pesquisa_terabyte(busca):
 
         
 
-        f=open('preços.csv', 'a',encoding='utf-8', newline='')
+        f=open(arquivo, 'a',encoding='utf-8', newline='')
         writer = csv.writer(f)
 
         try:

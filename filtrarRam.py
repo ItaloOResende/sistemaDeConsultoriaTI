@@ -4,12 +4,12 @@ pd.set_option('display.max_columns', None)
 pd.set_option('display.max_rows', 10)
 pd.set_option('display.width', None)
 
-aFiltrar = "Produtos Ordenados.csv"
+aFiltrar = "csvs/Produtos Ordenados.csv"
 
 
 def filtrar_memoria_desktop(file_path, memType, memSize):
     print('preparando tabela...')
-    csvName= f"memoria_{memType}_{memSize}.csv" 
+    csvName= f"csvs/memoria_{memType}_{memSize}.csv" 
 
     try:
         df = pd.read_csv(file_path, encoding='latin1', skiprows=1, header=None, names=['Produto', 'Preço', 'Link'])

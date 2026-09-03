@@ -8,6 +8,7 @@ import csv
 def pesquisa_kabum(busca):
   site = "https://www.kabum.com.br"
   url = f"{site}/busca/{busca.lower().replace(' ', '-')}"
+  arquivo = "csvs/preços.csv"
   with sync_playwright() as pw:
       # Lança o navegador (headless=False permite que você veja a ação acontecendo)
       navegador =  pw.chromium.launch(headless=True)
@@ -22,7 +23,7 @@ def pesquisa_kabum(busca):
       lista = pagina.locator("a[href*='/produto/']").all()
       print(f' achados {len(lista)} produtos na Kabum...')
 
-      f=open('preços.csv', 'a',encoding='utf-8', newline='')
+      f=open(arquivo, 'a',encoding='utf-8', newline='')
       writer = csv.writer(f)
 
 
