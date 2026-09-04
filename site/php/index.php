@@ -6,19 +6,14 @@ $totalSoma = 0.0;
 $erroTerminal = '';
 
 function converterPrecoParaFloat($precoStr) {
-    // Remove R$, espaços e caracteres estranhos
     $limpo = preg_replace('/[^\d,\.]/', '', $precoStr);
 
-    // Se tiver vírgula e ponto (ex: 1.250,90), tira o ponto de milhar e troca vírgula por ponto
     if (strpos($limpo, ',') !== false && strpos($limpo, '.') !== false) {
         $limpo = str_replace('.', '', $limpo);
         $limpo = str_replace(',', '.', $limpo);
-    } 
-    // Se só tiver vírgula (ex: 379,99), troca por ponto
-    elseif (strpos($limpo, ',') !== false) {
+    } elseif (strpos($limpo, ',') !== false) {
         $limpo = str_replace(',', '.', $limpo);
     }
-    // Se já estiver com ponto (ex: 379.99), mantém como está
 
     return floatval($limpo);
 }
@@ -40,7 +35,7 @@ function identificarLoja($url) {
 $perfilBusca = $_GET['perfil_busca'] ?? 'barato';
 $modoSetup = isset($_GET['montar_setup']) && $_GET['montar_setup'] === '1';
 
-// 1. Processador (Marca -> Linha -> Geração -> Vídeo Integrado)
+// 1. Processador
 $termoCpu = '';
 $cpuMarca = $_GET['cpu_marca'] ?? '';
 $cpuLinha = $_GET['cpu_linha'] ?? '';
@@ -56,19 +51,18 @@ if (!empty($cpuMarca)) {
         $termoCpu .= ($cpuMarca === 'intel') ? ' 14ª geracao' : ' 7000';
     }
 
-    // Refinamento por sufixo de vídeo integrado
     if ($cpuVideo === 'sim') {
         if ($cpuMarca === 'amd') {
-            $termoCpu .= " g"; // Ex: Ryzen 5 5600G
+            $termoCpu .= " g";
         }
     } elseif ($cpuVideo === 'nao') {
         if ($cpuMarca === 'intel') {
-            $termoCpu .= " f"; // Modelos F da Intel não possuem iGPU e são mais baratos
+            $termoCpu .= " f";
         }
     }
 }
 
-// 2. Memória RAM (Capacidade primeiro, DDR depois)
+// 2. Memória RAM
 $termoRam = '';
 $ramCap = $_GET['ram_cap'] ?? '';
 $ramDdr = $_GET['ram_ddr'] ?? '';
@@ -95,7 +89,7 @@ if (!empty($discoTipo) || !empty($discoCap)) {
     if (!empty($discoCap)) $termoArmazenamento .= " " . $discoCap;
 }
 
-// 4. Placa de Vídeo (Marca -> Série -> Modelo)
+// 4. Placa de Vídeo
 $termoGpu = '';
 $gpuMarca  = $_GET['gpu_marca'] ?? '';
 $gpuSerie  = $_GET['gpu_serie'] ?? '';
@@ -119,7 +113,6 @@ if (!empty($termoRam)) $pecasParaCotar['ram'] = ['rotulo' => 'Memória RAM', 'te
 if (!empty($termoArmazenamento)) $pecasParaCotar['armazenamento'] = ['rotulo' => 'Armazenamento', 'termo' => $termoArmazenamento];
 if (!empty($termoGpu)) $pecasParaCotar['gpu'] = ['rotulo' => 'Placa de Vídeo', 'termo' => $termoGpu];
 
-// Se ativou modo SETUP COMPLETO, preenche os itens restantes automaticamente
 if ($modoSetup) {
     if (!isset($pecasParaCotar['cpu'])) {
         $pecasParaCotar['cpu'] = [
@@ -158,60 +151,67 @@ if ($modoSetup) {
     }
 }
 
-// 6. Execução dos scripts Python e seleção do menor preço
+// 6. Leitura direta das tabelas CSV
 if (!empty($pecasParaCotar)) {
-    $raiz_projeto = dirname(__DIR__);
+    $raiz_projeto = dirname(dirname(__DIR__));
+    $pasta_csvs   = $raiz_projeto . DIRECTORY_SEPARATOR . 'csvs' . DIRECTORY_SEPARATOR;
 
     foreach ($pecasParaCotar as $chave => $dados) {
-        $termo = $dados['termo'];
+        $termo  = $dados['termo'];
         $rotulo = $dados['rotulo'];
-        $termoEscapado = escapeshellarg($termo);
+        $arquivosParaLer = [];
 
-        $csv_ordenado = $raiz_projeto . DIRECTORY_SEPARATOR . 'Produtos Ordenados.csv';
-        $csv_bruto = $raiz_projeto . DIRECTORY_SEPARATOR . 'preços.csv';
+        if ($chave === 'ram') {
+            $capacidade = strtolower($_GET['ram_cap'] ?? '8gb');
+            $geracao    = strtolower($_GET['ram_ddr'] ?? '');
 
-        if (file_exists($csv_ordenado)) @file_put_contents($csv_ordenado, '');
-        if (file_exists($csv_bruto)) @file_put_contents($csv_bruto, '');
+            if (!empty($geracao)) {
+                $arquivosParaLer[] = $pasta_csvs . "memoria_{$geracao}_{$capacidade}.csv";
+            } else {
+                $arquivosParaLer = glob($pasta_csvs . "memoria_ddr*_{$capacidade}.csv") ?: [];
+            }
+        } else {
+            $arquivosParaLer = [
+                $raiz_projeto . DIRECTORY_SEPARATOR . 'Produtos Ordenados.csv',
+                $raiz_projeto . DIRECTORY_SEPARATOR . 'preços.csv'
+            ];
+        }
 
-        $cmd = "cd /d \"$raiz_projeto\" && python -X utf8 buscaGeral.py $termoEscapado 2>&1";
-        $output = shell_exec($cmd);
-
-        $csv_file = (file_exists($csv_ordenado) && filesize($csv_ordenado) > 0) ? $csv_ordenado : ((file_exists($csv_bruto) && filesize($csv_bruto) > 0) ? $csv_bruto : null);
         $itensDestaPeca = [];
 
-        if ($csv_file) {
-            if (($handle = fopen($csv_file, "r")) !== FALSE) {
-                while (($data = fgetcsv($handle, 1000, ",")) !== FALSE) {
-                    if (count($data) >= 3) {
-                        $link = trim($data[2]);
-                        $precoTexto = trim($data[1]);
-                        $precoNum = converterPrecoParaFloat($precoTexto);
-                        $titulo = mb_convert_encoding(trim($data[0]), 'UTF-8', 'UTF-8');
+        foreach ($arquivosParaLer as $csv_file) {
+            if (file_exists($csv_file) && filesize($csv_file) > 0) {
+                if (($handle = fopen($csv_file, "r")) !== FALSE) {
+                    while (($data = fgetcsv($handle, 1000, ",")) !== FALSE) {
+                        if (count($data) >= 3) {
+                            $link       = trim($data[2]);
+                            $precoTexto = trim($data[1]);
+                            $precoNum   = converterPrecoParaFloat($precoTexto);
+                            $titulo     = mb_convert_encoding(trim($data[0]), 'UTF-8', 'UTF-8');
 
-                        if ($precoNum > 0 && !empty($link)) {
-                            $itensDestaPeca[] = [
-                                'titulo'     => $titulo,
-                                'precoTexto' => (strpos($precoTexto, 'R$') === false ? 'R$ ' : '') . $precoTexto,
-                                'precoNum'   => $precoNum,
-                                'link'       => $link,
-                                'loja'       => identificarLoja($link)
-                            ];
+                            if ($precoNum > 0 && !empty($link)) {
+                                $itensDestaPeca[] = [
+                                    'titulo'     => $titulo,
+                                    'precoTexto' => (strpos($precoTexto, 'R$') === false ? 'R$ ' : '') . $precoTexto,
+                                    'precoNum'   => $precoNum,
+                                    'link'       => $link,
+                                    'loja'       => identificarLoja($link)
+                                ];
+                            }
                         }
                     }
+                    fclose($handle);
                 }
-                fclose($handle);
             }
+        }
 
+        if (!empty($itensDestaPeca)) {
             usort($itensDestaPeca, function ($a, $b) use ($perfilBusca) {
                 return ($perfilBusca === 'desempenho') ? ($b['precoNum'] <=> $a['precoNum']) : ($a['precoNum'] <=> $b['precoNum']);
             });
 
-            // Extrai estritamente o item vencedor (mais barato)
-            $melhorOpcao = !empty($itensDestaPeca) ? $itensDestaPeca[0] : null;
-
-            if ($melhorOpcao) {
-                $totalSoma += $melhorOpcao['precoNum'];
-            }
+            $melhorOpcao = $itensDestaPeca[0];
+            $totalSoma += $melhorOpcao['precoNum'];
 
             $resultadosPorPeca[$chave] = [
                 'rotulo' => $rotulo,
@@ -219,7 +219,11 @@ if (!empty($pecasParaCotar)) {
                 'item'   => $melhorOpcao
             ];
         } else {
-            $erroTerminal .= "Falha na busca de [$rotulo]: " . ($output ?: "Nenhum dado retornado") . "\n";
+            $resultadosPorPeca[$chave] = [
+                'rotulo' => $rotulo,
+                'termo'  => $termo,
+                'item'   => null
+            ];
         }
     }
 }
@@ -227,330 +231,9 @@ if (!empty($pecasParaCotar)) {
 <!DOCTYPE html>
 <html lang="pt-BR">
 <head>
+    <link rel="stylesheet" href="../css/style.css">
     <meta charset="UTF-8">
     <title>Consultoria TI - Painel de Cotação</title>
-    <style>
-        :root {
-            --bg-main: #0b1120;
-            --bg-card: #151f32;
-            --bg-input: #090e17;
-            --border: #24324a;
-            --primary: #38bdf8;
-            --primary-hover: #0284c7;
-            --text-main: #f8fafc;
-            --text-muted: #94a3b8;
-            --accent-green: #34d399;
-        }
-
-        * {
-            box-sizing: border-box;
-            margin: 0;
-            padding: 0;
-            font-family: 'Segoe UI', system-ui, -apple-system, sans-serif;
-        }
-
-        body {
-            background-color: var(--bg-main);
-            color: var(--text-main);
-            min-height: 100vh;
-            display: flex;
-            justify-content: center;
-        }
-
-        .dashboard-container {
-            width: 100%;
-            max-width: 1600px;
-            display: flex;
-            gap: 2rem;
-            padding: 2rem;
-            align-items: flex-start;
-        }
-
-        .sidebar {
-            width: 380px;
-            min-width: 380px;
-            background-color: var(--bg-card);
-            border: 1px solid var(--border);
-            border-radius: 12px;
-            padding: 1.5rem;
-            position: sticky;
-            top: 2rem;
-            max-height: calc(100vh - 4rem);
-            overflow-y: auto;
-            box-shadow: 0 10px 25px -5px rgba(0, 0, 0, 0.5);
-        }
-
-        .sidebar-header {
-            margin-bottom: 1.25rem;
-            border-bottom: 1px solid var(--border);
-            padding-bottom: 1rem;
-        }
-
-        .sidebar-header h2 {
-            font-size: 1.35rem;
-            color: var(--primary);
-            font-weight: 800;
-        }
-
-        .sidebar-header p {
-            font-size: 0.8rem;
-            color: var(--text-muted);
-            margin-top: 0.2rem;
-        }
-
-        .perfil-box {
-            display: flex;
-            flex-direction: column;
-            gap: 0.5rem;
-            background: var(--bg-input);
-            border: 1px solid var(--border);
-            border-radius: 8px;
-            padding: 0.75rem 1rem;
-            margin-bottom: 1.25rem;
-        }
-
-        .perfil-box span {
-            font-size: 0.75rem;
-            font-weight: 700;
-            color: var(--text-muted);
-            text-transform: uppercase;
-        }
-
-        .radio-group {
-            display: flex;
-            justify-content: space-between;
-        }
-
-        .radio-label {
-            display: flex;
-            align-items: center;
-            gap: 0.4rem;
-            font-size: 0.85rem;
-            font-weight: 600;
-            cursor: pointer;
-        }
-
-        .radio-label input[type="radio"] {
-            accent-color: var(--primary);
-        }
-
-        .accordion-group {
-            display: flex;
-            flex-direction: column;
-            gap: 0.75rem;
-            margin-bottom: 1.5rem;
-        }
-
-        .accordion-item {
-            background: var(--bg-input);
-            border: 1px solid var(--border);
-            border-radius: 8px;
-            overflow: hidden;
-            transition: border-color 0.2s;
-        }
-
-        .accordion-item:focus-within {
-            border-color: var(--primary);
-        }
-
-        .accordion-btn {
-            width: 100%;
-            background: transparent;
-            border: none;
-            color: var(--text-main);
-            padding: 0.85rem 1rem;
-            display: flex;
-            justify-content: space-between;
-            align-items: center;
-            font-size: 0.95rem;
-            font-weight: 600;
-            cursor: pointer;
-            text-align: left;
-        }
-
-        .accordion-btn span.seta {
-            transition: transform 0.2s;
-            font-size: 0.75rem;
-            color: var(--text-muted);
-        }
-
-        .accordion-btn.active span.seta {
-            transform: rotate(180deg);
-        }
-
-        .accordion-content {
-            display: none;
-            padding: 0.75rem 1rem 1rem 1rem;
-            border-top: 1px solid var(--border);
-            flex-direction: column;
-            gap: 0.6rem;
-        }
-
-        .accordion-content.open {
-            display: flex;
-        }
-
-        select {
-            width: 100%;
-            padding: 0.65rem 0.75rem;
-            background-color: var(--bg-card);
-            border: 1px solid var(--border);
-            border-radius: 6px;
-            color: var(--text-main);
-            font-size: 0.88rem;
-            outline: none;
-            cursor: pointer;
-        }
-
-        select:focus {
-            border-color: var(--primary);
-        }
-
-        .checkbox-container {
-            display: flex;
-            align-items: center;
-            gap: 0.6rem;
-            cursor: pointer;
-            user-select: none;
-            font-size: 0.85rem;
-            font-weight: 600;
-            margin-bottom: 1.25rem;
-        }
-
-        .checkbox-container input[type="checkbox"] {
-            width: 18px;
-            height: 18px;
-            accent-color: var(--primary);
-        }
-
-        .btn-buscar {
-            width: 100%;
-            padding: 0.85rem;
-            background: var(--primary);
-            border: none;
-            border-radius: 8px;
-            color: #000;
-            font-weight: 700;
-            font-size: 1rem;
-            cursor: pointer;
-            transition: background 0.2s;
-        }
-
-        .btn-buscar:hover {
-            background: var(--primary-hover);
-        }
-
-        .main-content {
-            flex: 1;
-            display: flex;
-            flex-direction: column;
-            gap: 1.5rem;
-        }
-
-        .summary-banner {
-            background: linear-gradient(135deg, #151f32, #1e293b);
-            border: 1px solid var(--primary);
-            border-radius: 12px;
-            padding: 1.5rem 2rem;
-            display: flex;
-            justify-content: space-between;
-            align-items: center;
-        }
-
-        .summary-title {
-            font-size: 1.25rem;
-            font-weight: 700;
-        }
-
-        .summary-subtitle {
-            font-size: 0.88rem;
-            color: var(--text-muted);
-            margin-top: 0.25rem;
-        }
-
-        .summary-price {
-            font-size: 2.2rem;
-            font-weight: 800;
-            color: var(--accent-green);
-        }
-
-        .categoria-bloco {
-            background-color: var(--bg-card);
-            border: 1px solid var(--border);
-            border-radius: 12px;
-            padding: 1.25rem 1.5rem;
-        }
-
-        .categoria-label {
-            font-size: 0.8rem;
-            text-transform: uppercase;
-            color: var(--text-muted);
-            font-weight: 700;
-            margin-bottom: 0.6rem;
-        }
-
-        .product-card {
-            background-color: var(--bg-input);
-            border: 1px solid var(--border);
-            border-radius: 8px;
-            padding: 1rem 1.25rem;
-            display: flex;
-            justify-content: space-between;
-            align-items: center;
-            gap: 1.5rem;
-            text-decoration: none;
-            color: inherit;
-            transition: transform 0.15s, border-color 0.15s;
-        }
-
-        .product-card:hover {
-            border-color: var(--primary);
-            transform: translateX(4px);
-        }
-
-        .product-info {
-            flex: 1;
-        }
-
-        .product-title {
-            font-size: 0.95rem;
-            font-weight: 500;
-            margin-bottom: 0.35rem;
-            line-height: 1.35;
-        }
-
-        .product-price {
-            font-size: 1.25rem;
-            font-weight: 700;
-            color: var(--accent-green);
-        }
-
-        .loja-badge {
-            display: inline-flex;
-            align-items: center;
-            gap: 0.4rem;
-            font-size: 0.85rem;
-            font-weight: 700;
-            padding: 0.45rem 0.85rem;
-            border-radius: 6px;
-            white-space: nowrap;
-        }
-
-        .loja-kabum { background-color: rgba(249, 115, 22, 0.15); color: #fb923c; border: 1px solid rgba(249, 115, 22, 0.3); }
-        .loja-amazon { background-color: rgba(234, 179, 8, 0.15); color: #facc15; border: 1px solid rgba(234, 179, 8, 0.3); }
-        .loja-terabyte { background-color: rgba(59, 130, 246, 0.15); color: #60a5fa; border: 1px solid rgba(59, 130, 246, 0.3); }
-        .loja-pichau { background-color: rgba(239, 68, 68, 0.15); color: #f87171; border: 1px solid rgba(239, 68, 68, 0.3); }
-        .loja-padrao { background-color: rgba(148, 163, 184, 0.15); color: #cbd5e1; border: 1px solid rgba(148, 163, 184, 0.3); }
-
-        .empty-placeholder {
-            padding: 4rem 2rem;
-            text-align: center;
-            background: var(--bg-card);
-            border: 1px dashed var(--border);
-            border-radius: 12px;
-            color: var(--text-muted);
-        }
-    </style>
 </head>
 <body>
 
@@ -581,31 +264,27 @@ if (!empty($pecasParaCotar)) {
 
             <div class="accordion-group">
                 
-                <!-- 1. Processador (Marca -> Linha -> Geração -> Vídeo Integrado no Final) -->
+                <!-- 1. Processador -->
                 <div class="accordion-item">
                     <button type="button" class="accordion-btn" onclick="toggleAccordion(this)">
                         <span>🧠 Processador</span>
                         <span class="seta">▼</span>
                     </button>
                     <div class="accordion-content">
-                        <!-- Nível 1: Marca -->
                         <select name="cpu_marca" id="cpu_marca" class="seletor-peca">
                             <option value="">Marca (Selecionar)</option>
                             <option value="intel" <?= ($cpuMarca == 'intel') ? 'selected' : '' ?>>Intel Core</option>
                             <option value="amd" <?= ($cpuMarca == 'amd') ? 'selected' : '' ?>>AMD Ryzen</option>
                         </select>
                         
-                        <!-- Nível 2: Linha -->
                         <select name="cpu_linha" id="cpu_linha">
                             <option value="">Linha (Selecionar)</option>
                         </select>
                         
-                        <!-- Nível 3: Geração -->
                         <select name="cpu_gen" id="cpu_gen">
                             <option value="">Geração (Selecionar)</option>
                         </select>
 
-                        <!-- Nível 4: Vídeo Integrado (Última opção) -->
                         <select name="video_integrado" id="video_integrado">
                             <option value="">Vídeo Integrado (Selecionar)</option>
                             <option value="sim" <?= ($cpuVideo == 'sim') ? 'selected' : '' ?>>Com Vídeo Integrado</option>
@@ -620,33 +299,30 @@ if (!empty($pecasParaCotar)) {
                         <span>⚡ Memória RAM</span>
                         <span class="seta">▼</span>
                     </button>
-                <div class="accordion-content">
-                    <!-- Tipo de Computador -->
-                    <select name="ram_tipo" id="ram_tipo" class="seletor-peca">
-                        <option value="">Equipamento (Selecionar)</option>
-                        <option value="desktop" <?= (($_GET['ram_tipo'] ?? '') == 'desktop') ? 'selected' : '' ?>>Desktop (PC de Mesa)</option>
-                        <option value="notebook" <?= (($_GET['ram_tipo'] ?? '') == 'notebook') ? 'selected' : '' ?>>Notebook (SODIMM)</option>
-                    </select>
+                    <div class="accordion-content">
+                        <select name="ram_tipo" id="ram_tipo" class="seletor-peca">
+                            <option value="">Equipamento (Selecionar)</option>
+                            <option value="desktop" <?= (($_GET['ram_tipo'] ?? '') == 'desktop') ? 'selected' : '' ?>>Desktop (PC de Mesa)</option>
+                            <option value="notebook" <?= (($_GET['ram_tipo'] ?? '') == 'notebook') ? 'selected' : '' ?>>Notebook (SODIMM)</option>
+                        </select>
 
-                    <!-- Capacidade -->
-                    <select name="ram_cap" id="ram_cap" class="seletor-peca">
-                        <option value="">Capacidade (Ignorar)</option>
-                        <option value="4gb" <?= (($ramCap ?? '') == '4gb') ? 'selected' : '' ?>>4GB</option>
-                        <option value="8gb" <?= (($ramCap ?? '') == '8gb') ? 'selected' : '' ?>>8GB</option>
-                        <option value="16gb" <?= (($ramCap ?? '') == '16gb') ? 'selected' : '' ?>>16GB</option>
-                        <option value="32gb" <?= (($ramCap ?? '') == '32gb') ? 'selected' : '' ?>>32GB</option>
-                        <option value="64gb" <?= (($ramCap ?? '') == '64gb') ? 'selected' : '' ?>>64GB</option>
-                    </select>
+                        <select name="ram_cap" id="ram_cap" class="seletor-peca">
+                            <option value="">Capacidade (Ignorar)</option>
+                            <option value="4gb" <?= (($ramCap ?? '') == '4gb') ? 'selected' : '' ?>>4GB</option>
+                            <option value="8gb" <?= (($ramCap ?? '') == '8gb') ? 'selected' : '' ?>>8GB</option>
+                            <option value="16gb" <?= (($ramCap ?? '') == '16gb') ? 'selected' : '' ?>>16GB</option>
+                            <option value="32gb" <?= (($ramCap ?? '') == '32gb') ? 'selected' : '' ?>>32GB</option>
+                            <option value="64gb" <?= (($ramCap ?? '') == '64gb') ? 'selected' : '' ?>>64GB</option>
+                        </select>
 
-                    <!-- Padrão DDR -->
-                    <select name="ram_ddr" id="ram_ddr" class="seletor-peca">
-                        <option value="">Qualquer Padrão DDR...</option>
-                        <option value="ddr3" <?= (($ramDdr ?? '') == 'ddr3') ? 'selected' : '' ?>>DDR3</option>
-                        <option value="ddr4" <?= (($ramDdr ?? '') == 'ddr4') ? 'selected' : '' ?>>DDR4</option>
-                        <option value="ddr5" <?= (($ramDdr ?? '') == 'ddr5') ? 'selected' : '' ?>>DDR5</option>
-                    </select>
+                        <select name="ram_ddr" id="ram_ddr" class="seletor-peca">
+                            <option value="">Qualquer Padrão DDR...</option>
+                            <option value="ddr3" <?= (($ramDdr ?? '') == 'ddr3') ? 'selected' : '' ?>>DDR3</option>
+                            <option value="ddr4" <?= (($ramDdr ?? '') == 'ddr4') ? 'selected' : '' ?>>DDR4</option>
+                            <option value="ddr5" <?= (($ramDdr ?? '') == 'ddr5') ? 'selected' : '' ?>>DDR5</option>
+                        </select>
+                    </div>
                 </div>
-            </div>
 
                 <!-- 3. Armazenamento -->
                 <div class="accordion-item">
@@ -658,7 +334,7 @@ if (!empty($pecasParaCotar)) {
                         <select name="disco_tipo" id="disco_tipo" class="seletor-peca">
                             <option value="">Tipo (Ignorar)</option>
                             <option value="M.2 NVMe" <?= ($discoTipo == 'M.2 NVMe') ? 'selected' : '' ?>>M.2 NVMe</option>
-                            <option value="M.2 SATA" <?= ($discoTipo == 'M.2 SATA') ? 'selected' : '' ?>>M.2 SATA </option>
+                            <option value="M.2 SATA" <?= ($discoTipo == 'M.2 SATA') ? 'selected' : '' ?>>M.2 SATA</option>
                             <option value="ssd sata" <?= ($discoTipo == 'ssd sata') ? 'selected' : '' ?>>SSD SATA</option>
                             <option value="hd PC" <?= ($discoTipo == 'hd PC') ? 'selected' : '' ?>>HD PC</option>
                             <option value="hd notebook" <?= ($discoTipo == 'hd notebook') ? 'selected' : '' ?>>HD notebook</option>
@@ -707,14 +383,13 @@ if (!empty($pecasParaCotar)) {
         </form>
     </aside>
 
-    <!-- ÁREA PRINCIPAL (RESULTADOS VENCEDORES) -->
+    <!-- ÁREA PRINCIPAL -->
     <main class="main-content">
         
         <?php if (!empty($erroTerminal)): ?>
             <pre style="background:#1e1e2e; color:#f38ba8; padding:1.2rem; border-radius:8px; border:1px solid #f38ba8; overflow-x:auto; font-size:0.85rem;"><?= htmlspecialchars($erroTerminal) ?></pre>
         <?php endif; ?>
 
-        <!-- Banner Consolidado de Soma -->
         <?php if ($totalSoma > 0): ?>
             <div class="summary-banner">
                 <div>
@@ -731,7 +406,6 @@ if (!empty($pecasParaCotar)) {
             </div>
         <?php endif; ?>
 
-        <!-- Exibe estritamente 1 card por componente pesquisado -->
         <?php if (!empty($resultadosPorPeca)): ?>
             <?php foreach ($resultadosPorPeca as $chave => $dados): ?>
                 <?php if (!empty($dados['item'])): 
@@ -805,7 +479,7 @@ const dadosCpu = {
     }
 };
 
-// Dados completos para GPU
+// Dados para GPU
 const dadosGpu = {
     nvidia: {
         series: [
@@ -994,6 +668,16 @@ selectGpuSerie.addEventListener('change', (e) => atualizarGpuModelos(e.target.va
 // Auto-check setup completo
 const checkboxSetup = document.getElementById('montarSetupCheckbox');
 const seletores = document.querySelectorAll('.seletor-peca');
+
+function checarMultiplos() {
+    let preenchidos = 0;
+    seletores.forEach(s => {
+        if (s.value !== '') preenchidos++;
+    });
+    if (checkboxSetup) {
+        checkboxSetup.checked = preenchidos >= 2;
+    }
+}
 
 seletores.forEach(s => s.addEventListener('change', checarMultiplos));
 
