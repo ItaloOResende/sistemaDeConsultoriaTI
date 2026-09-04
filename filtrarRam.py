@@ -18,8 +18,8 @@ def filtrar_memoria_desktop(file_path, memType, memSize):
         dfOrdenado = df.sort_values(by='Preço', ascending=True).reset_index(drop=True)
         dfFiltrado = dfOrdenado[dfOrdenado['Produto'].str.contains(memType, case=False, na=False) & dfOrdenado['Produto'].str.contains(memSize, case=False, na=False)]
         dfFiltrado = dfFiltrado[~dfFiltrado['Produto'].str.contains("notebook", case=False, na=False) 
-                                & ~dfFiltrado['Produto'].str.contains("SODIMM", case=False, na=False)
-                                & ~dfFiltrado['Produto'].str.contains("laptop", case=False, na=False)]
+                                | ~dfFiltrado['Produto'].str.contains("SODIMM", case=False, na=False)
+                                | ~dfFiltrado['Produto'].str.contains("laptop", case=False, na=False)]
         dfFiltrado.to_csv(csvName, index=False)
         #print(dfOrdenado.to_string(index=False))
         return pd.read_csv(csvName, nrows=10)
