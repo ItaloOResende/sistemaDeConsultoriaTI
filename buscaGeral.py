@@ -20,7 +20,7 @@ def pesquisar_ram(rsizes, rtypes):
             busca = f"memoria ram {rtype} {rsize}"
             print (f"Pesquisando por: {busca}...")
             # Limpa o CSV anterior antes de popular os novos
-            with open('preços.csv', 'w', newline='', encoding='utf-8') as f:
+            with open('csvs/preços.csv', 'w', newline='', encoding='utf-8') as f:
                 pass
 
             #pesquisando na Amazon
@@ -49,7 +49,7 @@ def pesquisar_ram(rsizes, rtypes):
 
             #organizando tabela
             try:
-                fazerTabela.prepara_tabela('preços.csv')
+                fazerTabela.prepara_tabela('csvs/preços.csv')
             except Exception as e:
                 print(f"Erro ao gerar tabela: {e}")
 
