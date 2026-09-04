@@ -5,5 +5,5 @@ __pycache__/
 memoria_ddr4_16gb.csv
 buscaGeral.py
 .gitignore
-csvs/*
-preços.csv
+csvs/*.csv
+

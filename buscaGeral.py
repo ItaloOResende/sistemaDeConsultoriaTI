@@ -11,12 +11,14 @@ import filtrarRam
 import filtrarSSD
 
 ramTypes = ["ddr3","ddr4", "ddr5"]
-ramSizes = ["2gb", "4gb", "8gb", "16gb", "32gb"]
+ramSizes = [ "4gb", "8gb", "16gb"]
 
 def pesquisar_ram(rsizes, rtypes):
     print("pesquisando memorias ram...")
     for rtype in rtypes:
         for rsize in rsizes:
+            if rtype == "ddr5" and rsize == "4gb":
+                continue  # Pula a combinação de DDR5 com 4GB, pois não existe
             busca = f"memoria ram {rtype} {rsize}"
             print (f"Pesquisando por: {busca}...")
             # Limpa o CSV anterior antes de popular os novos
@@ -105,4 +107,6 @@ def pesquisar_ram(rsizes, rtypes):
 #     print(f"Ocorreu um erro  ao filtrar tabela: {e}")
 
 if __name__ == '__main__':
+
     pesquisar_ram(ramSizes, ramTypes)
+    
