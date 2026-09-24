@@ -155,6 +155,6 @@ if __name__ == '__main__':
     with open('csvs/preços.csv', 'w', newline='', encoding='utf-8') as f:
         pass
     
-    pesquisa_armazenamento(armazenamentoTypes, armVariant, armazenamentoSizes)
-    #pesquisar_ram(ramSizes, ramTypes)
-    #pesquisar_nvidia(gpuVendors[0], nvidiaSeries, nvidiaGenerations, nvidiaTiers)
+    pesquisa_armazenamento(armazenamentoTypes, armVariant, armazenamentoSizes) #PESQUISA HDS E SSDS
+    #pesquisar_ram(ramSizes, ramTypes) #PESQQQUISA MEMORIAS RAM DDR3 A 5
+    #pesquisar_nvidia(gpuVendors[0], nvidiaSeries, nvidiaGenerations, nvidiaTiers) # PESQUISA PLACAS DE VIDEO NVIDIA DESDE A GTX1050 PRA CIMA
