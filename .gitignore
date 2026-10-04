@@ -3,7 +3,6 @@ perfil_robo/
 __pycache__/
 *.pyc
 memoria_ddr4_16gb.csv
-buscaGeral.py
 .gitignore
 csvs/*.csv
 
