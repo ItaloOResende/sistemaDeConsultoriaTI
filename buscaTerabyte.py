@@ -1,11 +1,6 @@
 from playwright.sync_api import sync_playwright
 import csv
 
-
-
-# busca = "Memoria Ram DDR4"
-
-
 def pesquisa_terabyte(busca):
     site = "https://www.terabyteshop.com.br"
     url = f"{site}/busca?str={busca.replace(' ', '%20')}"
@@ -80,3 +75,7 @@ def getItens(pagina,url,tentativas):
                 return getItens(pagina,url,tentativas)
     
 
+if __name__ == '__main__':
+
+    busca = "Memoria Ram DDR4"
+    pesquisa_terabyte(busca)

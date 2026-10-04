@@ -16,6 +16,18 @@ def filtrar_amazenamento(file_path, armType, armVariant, armSize):
 
         df["Preço"] = pd.to_numeric(df["Preço"])
         dfOrdenado = df.sort_values(by='Preço', ascending=True).reset_index(drop=True)
+        match armSize.lower():
+            case "128gb":
+                sizeFilter = "120gb|128gb"
+            case "256gb":
+                sizeFilter = "256gb|240gb"
+            case "512gb":
+                sizeFilter = "480gb|512gb|500gb"
+            case "1tb":
+                sizeFilter = "960gb|1tb"
+            case "2tb":
+                sizeFilter = "2tb"
+
         match armType.lower():
             case "hdd":
                 match armVariant.lower():
@@ -27,19 +39,19 @@ def filtrar_amazenamento(file_path, armType, armVariant, armSize):
                 match armVariant.lower():
                     case "m.2 sata":
                         dfOrdenado = df.sort_values(by='Preço', ascending=True).reset_index(drop=True)
-                        dfFiltrado = dfOrdenado[dfOrdenado['Produto'].str.contains("m.2", case=False, na=False) & dfOrdenado['Produto'].str.contains("sata", case=False, na=False) & dfOrdenado['Produto'].str.contains(armSize, case=False, na=False)]
+                        dfFiltrado = dfOrdenado[dfOrdenado['Produto'].str.contains("m.2", case=False, na=False) & dfOrdenado['Produto'].str.contains("sata", case=False, na=False) & dfOrdenado['Produto'].str.contains(sizeFilter, case=False, na=False)]
                         #deixando dispositivos externos de fora
-                        dfFiltrado = dfFiltrado[~dfFiltrado['Produto'].str.contains("externo", case=False, na=False)]
+                        dfFiltrado = dfFiltrado[~dfFiltrado['Produto'].str.contains("externo|120 gb", case=False, na=False)]
                     case "m.2 nvme":
                         dfOrdenado = df.sort_values(by='Preço', ascending=True).reset_index(drop=True)
-                        dfFiltrado = dfOrdenado[dfOrdenado['Produto'].str.contains("m.2", case=False, na=False) & dfOrdenado['Produto'].str.contains("nvme", case=False, na=False) & dfOrdenado['Produto'].str.contains(armSize, case=False, na=False)]
+                        dfFiltrado = dfOrdenado[dfOrdenado['Produto'].str.contains("m.2", case=False, na=False) & dfOrdenado['Produto'].str.contains("nvme", case=False, na=False) & dfOrdenado['Produto'].str.contains(sizeFilter, case=False, na=False)]
                         #deixando dispositivos externos de fora
-                        dfFiltrado = dfFiltrado[~dfFiltrado['Produto'].str.contains("externo|sata", case=False, na=False)]
+                        dfFiltrado = dfFiltrado[~dfFiltrado['Produto'].str.contains("externo|sata|120 gb", case=False, na=False)]
                     case "sata":
                             dfOrdenado = df.sort_values(by='Preço', ascending=True).reset_index(drop=True)
-                            dfFiltrado = dfOrdenado[dfOrdenado['Produto'].str.contains("ssd", case=False, na=False) & dfOrdenado['Produto'].str.contains("sata", case=False, na=False) & dfOrdenado['Produto'].str.contains(armSize, case=False, na=False)]
+                            dfFiltrado = dfOrdenado[dfOrdenado['Produto'].str.contains("ssd", case=False, na=False) & dfOrdenado['Produto'].str.contains("sata", case=False, na=False) & dfOrdenado['Produto'].str.contains(sizeFilter, case=False, na=False)]
                             #deixando dispositivos externos de fora
-                            dfFiltrado = dfFiltrado[~dfFiltrado['Produto'].str.contains("externo|m.2", case=False, na=False)]
+                            dfFiltrado = dfFiltrado[~dfFiltrado['Produto'].str.contains("externo|m.2|120 gb", case=False, na=False)]
                     case _:
                         print("armazenamento invalido")                                            
         

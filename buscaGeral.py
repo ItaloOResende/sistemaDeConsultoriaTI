@@ -10,6 +10,7 @@ import fazerTabela
 import filtrarRam
 import filtrarArmazenamento
 import filtrarGpus
+import filtrarCpus
 
 ramTypes = ["ddr3","ddr4", "ddr5"]
 ramSizes = [ "4gb", "8gb", "16gb"]
@@ -17,15 +18,20 @@ gpuVendors = ["nvidia", "amd"]
 nvidiaSeries = ["gtx", "rtx"]
 nvidiaGenerations = ["10", "16", "20", "30", "40", "50"]
 nvidiaTiers = ["50", "60","70","80","90"]
-AMDSeries = ["rx"]
-radeon5HSeries = ["520","530","550","560","570","580", "590"]
+AMDSeries ="rx"
+radeon5HSeries = ["570","580", "590"]
 radeon5TSeries = ["5300","5500", "5600", "5700"]
 radeon6TSeries = ["6300","6400", "6500", "6600","6650", "6700", "6750", "6800", "6900", "6950"]
 radeon7TSeries = ["7400","7600", "7650", "7700", "7800", "7900"]
 radeon9TSeries = ["9050","9060","9070" ]
 armazenamentoTypes = ["ssd", "hdd"]
 armVariant = ["m.2 sata", "m.2 nvme", "sata"]
-armazenamentoSizes = ["120gb","128gb","240gb", "256gb", "500gb", "512gb", "960gb", "1tb", "2tb"]
+armazenamentoSizes = ["128gb", "256gb", "512gb", "1tb", "2tb"]
+intelVendor = "intel"
+intelLines = ["i3", "i5", "i7", "i9"]  # pra incluir os core ultra basta acrescentar aqui
+intelGenerations = ["10", "11", "12", "13", "14"]
+# combinações que não existem no mercado de desktop (evita busca sem resultado)
+intelIndisponiveis = [("11", "i3")]
 
 def pesquisa(busca):
     print(f"Pesquisando por: {busca}...")
@@ -57,6 +63,7 @@ def pesquisa(busca):
         fazerTabela.prepara_tabela('csvs/preços.csv')
     except Exception as e:
         print(f"Erro ao gerar tabela: {e}")
+    time.sleep(5)
 
 def pesquisar_ram(rsizes, rtypes):
     with open('csvs/preços.csv', 'w', newline='', encoding='utf-8') as f:
@@ -72,22 +79,12 @@ def pesquisar_ram(rsizes, rtypes):
 
             #pesquisando na Amazon
             pesquisa(busca)
-            time.sleep(5)
-
-             
-    for rtype in rtypes:
-            for rsize in rsizes:
-                if rtype == "ddr5" and rsize == "4gb":
-                    continue  # Pula a combinação de DDR5 com 4GB, pois não existe
-                busca = f"memoria ram {rtype} {rsize}"
-                #filtrando tabela
-                try:
-                    filtrarRam.filtrar_memoria_desktop('csvs/Produtos Ordenados.csv', rtype, rsize)
-                    print(f"Filtragem de {busca} concluidas ")
-                    
-                except Exception as e:
-                    print(f"Ocorreu um erro  ao filtrar as memorias: {e}")
-                        # Pausa de 10 segundos entre cada pesquisa para evitar sobrebloqueios
+            try:
+                filtrarRam.filtrar_memoria_desktop('csvs/Produtos Ordenados.csv', rtype, rsize)
+                print(f"Filtragem de {busca} concluidas ")
+                
+            except Exception as e:
+                print(f"Ocorreu um erro  ao filtrar as memorias: {e}")
 
 def pesquisa_armazenamento(armType, armVariant, armSize):
     with open('csvs/preços.csv', 'w', newline='', encoding='utf-8') as f:
@@ -98,63 +95,79 @@ def pesquisa_armazenamento(armType, armVariant, armSize):
                 if v in ("m.2 sata", "m.2 nvme"):
                     continue #nao existe HDs m.2
             for s in armSize:
-                if s in ("120gb","240gb","500gb","960gb"): #PULANDO ESSAS PESQUISAS POIS OS RESULTADOS SERIAM REDUNDANTES
-                    continue
+                if t == "hdd":
+                   if s in ("128gb", "256gb"):
+                       continue
                 busca  = f"{t} {v} {s}"
                 pesquisa(busca)
-#FILTRANDO ARMAZENAMENTO
-    for t in armType:
-        for v in armVariant:
-            if t == "hdd":
-                if v in ("m.2 sata", "m.2 nvme"):
-                    continue #nao existe HDs m.2
-            for s in armSize:                    
-                busca  = f"{t} {v} {s}"
-                print(f"filtrando {busca}")
                 filtrarArmazenamento.filtrar_amazenamento('csvs/Produtos Ordenados.csv', t,v,s)
-
+    
 def pesquisar_nvidia(vendor, series,generations,tiers):
+    
     with open('csvs/preços.csv', 'w', newline='', encoding='utf-8') as f:
             pass
+    #pesquisando e filtrando
     for g in generations:
                 for t in tiers:
                     if g == "10":
                         if int(t) < 80:
                             busca = f"{vendor} {series[0]} {g}{t}"
+                            filtrarGpus.filtrar_nvidia('csvs/Produtos Ordenados.csv', series[0], g, t)
                     elif g == '16':
                             if int(t) < 60:
                                 busca = f"{vendor} {series[0]} {g}{t}"
+                                filtrarGpus.filtrar_nvidia('csvs/Produtos Ordenados.csv', series[0], g, t)
                     elif int(g) > 16 and int(g) < 40:
                         if int(t) > 30 and int(t) < 90:
                             busca = f"{vendor} {series[1]} {g}{t}"
+                            filtrarGpus.filtrar_nvidia('csvs/Produtos Ordenados.csv', series[0], g, t)
                     elif int(g) >= 40:
                         if int(t) > 30:
                             busca = f"{vendor} {series[1]} {g}{t}"
+                            filtrarGpus.filtrar_nvidia('csvs/Produtos Ordenados.csv', series[0], g, t)
                     
                     pesquisa(busca)
-    #FILTRANDO
+
+def pesquisar_amd_gpu(vendor,series,generations):
+    # Limpa o CSV anterior antes de popular os novos
+    with open('csvs/preços.csv', 'w', newline='', encoding='utf-8') as f:
+        pass
     for g in generations:
-                    for t in tiers:
-                        if g == "10":
-                            if int(t) < 80:
-                                filtrarGpus.filtrar_nvidia('csvs/Produtos Ordenados.csv', series[0], g, t)
-                        elif g == '16':
-                                if int(t) < 60:
-                                    filtrarGpus.filtrar_nvidia('csvs/Produtos Ordenados.csv', series[0], g, t)
-                        elif int(g) > 16 and int(g) < 40:
-                            if int(t) > 30 and int(t) < 90:
-                                filtrarGpus.filtrar_nvidia('csvs/Produtos Ordenados.csv', series[1], g, t)
-                        elif int(g) >= 40:
-                            if int(t) > 30:
-                                filtrarGpus.filtrar_nvidia('csvs/Produtos Ordenados.csv', series[1], g, t)
-                        
+        busca = f"{vendor} radeon {series} {g}"
+        pesquisa(busca)
+        filtrarGpus.filtrar_amd_gpu("csvs/Produtos Ordenados.csv",vendor,series,g)
+
+def pesquisar_intel_cpu(vendor, lines, generations, videoIntegrado=None):
+    # Limpa o CSV anterior antes de popular os novos
+    with open('csvs/preços.csv', 'w', newline='', encoding='utf-8') as f:
+        pass
+    print("pesquisando processadores intel...")
+    for linha in lines:
+        for g in generations:
+            if (g, linha) in intelIndisponiveis:
+                continue  # Pula combinações que não existem em desktop
+            busca = f"processador {vendor} core {linha} {g} geracao"
+            pesquisa(busca)
+            try:
+                filtrarCpus.filtrar_intel_cpu('csvs/Produtos Ordenados.csv', linha, g, videoIntegrado)
+                print(f"Filtragem de {busca} concluidas ")
+            except Exception as e:
+                print(f"Ocorreu um erro ao filtrar os processadores: {e}")
+
+    
+         
 
 #######################FUNCAO MAIN (RODA QUANDO O ARQUIVO.PY E CHAMADO INDIVIDUALMENTE)#############################################
 if __name__ == '__main__':
     # Limpa o CSV anterior antes de popular os novos
-    with open('csvs/preços.csv', 'w', newline='', encoding='utf-8') as f:
-        pass
     
-    pesquisa_armazenamento(armazenamentoTypes, armVariant, armazenamentoSizes) #PESQUISA HDS E SSDS
+    #pesquisa_armazenamento(armazenamentoTypes, armVariant, armazenamentoSizes) #PESQUISA HDS E SSDS
     #pesquisar_ram(ramSizes, ramTypes) #PESQQQUISA MEMORIAS RAM DDR3 A 5
     #pesquisar_nvidia(gpuVendors[0], nvidiaSeries, nvidiaGenerations, nvidiaTiers) # PESQUISA PLACAS DE VIDEO NVIDIA DESDE A GTX1050 PRA CIMA
+    #pesquisar_intel_cpu(intelVendor, intelLines, intelGenerations) #PESQUISA PROCESSADORES INTEL CORE DA 10ª A 14ª GERAÇÃO
+    #pesquisar_intel_cpu(intelVendor, intelLines, intelGenerations, "sim") #PESQUISA APENAS OS INTEL CORE COM SUFIXO K/KS
+    pesquisar_amd_gpu(gpuVendors[1],AMDSeries,radeon5HSeries)
+    pesquisar_amd_gpu(gpuVendors[1],AMDSeries,radeon5TSeries)
+    pesquisar_amd_gpu(gpuVendors[1],AMDSeries,radeon6TSeries)
+    pesquisar_amd_gpu(gpuVendors[1],AMDSeries,radeon7TSeries)
+    pesquisar_amd_gpu(gpuVendors[1],AMDSeries,radeon9TSeries)

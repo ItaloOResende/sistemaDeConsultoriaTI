@@ -51,7 +51,7 @@ def pesquisa_pichau(busca):
                         preco = item.locator('div[class$="-price_vista"]').text_content()        
                         link = item.first.get_attribute("href")
                         linkfull = site + link
-                        print(f"{titulo}\n {preco} /n {linkfull}")
+                        #print(f"{titulo}\n {preco} /n {linkfull}")
                         produto = (titulo, preco, linkfull)
                         writer.writerow(produto)
                         pass
