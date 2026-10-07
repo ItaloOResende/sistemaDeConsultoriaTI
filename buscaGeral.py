@@ -12,6 +12,8 @@ import filtrarRam
 import filtrarArmazenamento
 import filtrarGpus
 import filtrarCpus
+import filtrarFontes
+import filtrarCoolers
 
 # Configurações para busca de memórias RAM
 ramTypes = ["ddr3","ddr4", "ddr5"]
@@ -50,6 +52,11 @@ amdRyzenGenerations = ["3000", "4000","5000", "7000","8000", "9000"]
 # Combinações que não existem no mercado de desktop (evita busca sem resultado)
 # A linha Ryzen 3 parou no 3200G, não tem peça de 7000 nem 9000
 amdRyzenIndisponiveis = [("ryzen 3", "7000"), ("ryzen 3", "9000")]
+fontesCapacidade = ["400w", "500w","550W", "600w", "650W", "700w", "750W", "800w","850W", "1000w"]
+
+# Configurações para busca de coolers
+coolerTipos = ["air cooler", "water cooler"]
+coolerEstilos = ["simples", "rgb", "argb"]
 
 # Realiza busca em todas as lojas e organiza os resultados
 def pesquisa(busca):
@@ -174,7 +181,7 @@ def pesquisar_intel_cpu(vendor, lines, generations, videoIntegrado=None):
             except Exception as e:
                 print(f"Ocorreu um erro ao filtrar os processadores: {e}")
 
-def pesquisar_amd_cpu(lines=None, generations=None, vendor="amd", videoIntegrado=None):
+def pesquisar_amd_cpu(lines=None, generations=None, vendor="amd"):
     # Limpa o CSV anterior antes de popular os novos
     with open('csvs/preços.csv', 'w', newline='', encoding='utf-8') as f:
         pass
@@ -192,25 +199,68 @@ def pesquisar_amd_cpu(lines=None, generations=None, vendor="amd", videoIntegrado
             busca = f"processador {vendor} {linha} {g}"
             # pesquisa(busca)
             try:
-                filtrarCpus.filtrar_amd_cpu('csvs/Produtos Ordenados.csv', linha, g, videoIntegrado)
+                filtrarCpus.filtrar_amd_cpu('csvs/Produtos Ordenados.csv', linha, g)
                 print(f"Filtragem de {busca} concluidas ")
             except Exception as e:
                 print(f"Ocorreu um erro ao filtrar os processadores: {e}")
 
+def pesquisar_coolers(tipos=None, estilos=None):
+    with open('csvs/preços.csv', 'w', newline='', encoding='utf-8') as f:
+        pass
+    print("pesquisando coolers...")
+    if tipos is None:
+        tipos = coolerTipos
+    if estilos is None:
+        estilos = coolerEstilos
+    buscas = []
+    for tipo in tipos:
+        for estilo in estilos:
+            if estilo == "simple":
+                buscas.append(f"{tipo}")
+            else:
+                buscas.append(f"{tipo} {estilo}")
+    for busca in buscas:
+        pesquisa(busca)
+        try:
+            filtrarCoolers.filtrar_coolers('csvs/Produtos Ordenados.csv', tipo, estilo)
+            print(f"Filtragem de {busca} concluidas ")
+        except Exception as e:
+            print(f"Ocorreu um erro ao filtrar os coolers: {e}")        
+    
+
+def pesquisar_fontes(capacidades=None):
+    # Limpa o CSV anterior antes de popular os novos
+    with open('csvs/preços.csv', 'w', newline='', encoding='utf-8') as f:
+        pass
+    print("pesquisando fontes de alimentacao...")
+
+    if capacidades is None:
+        capacidades = fontesCapacidade
+
+    for capacidade in capacidades:
+        busca = f"fonte {capacidade} 80 plus"
+        pesquisa(busca)
+        try:
+            filtrarFontes.filtrar_fontes('csvs/Produtos Ordenados.csv', capacidade)
+            print(f"Filtragem de {busca} concluidas ")
+        except Exception as e:
+            print(f"Ocorreu um erro ao filtrar as fontes: {e}")
 
 #######################FUNCAO MAIN (RODA QUANDO O ARQUIVO.PY E CHAMADO INDIVIDUALMENTE)#############################################
 if __name__ == '__main__':
     # Limpa o CSV anterior antes de popular os novos
     ###################--FAVOR COMENTAR AS PESQUISAS QUE NAO DESEJA FAZER--#####################################################
-    pesquisa_armazenamento(armazenamentoTypes, armVariant, armazenamentoSizes) #PESQUISA HDS E SSDS
-    pesquisar_ram(ramSizes, ramTypes) #PESQQQUISA MEMORIAS RAM DDR3 A 5
-    pesquisar_nvidia(gpuVendors[0], nvidiaSeries, nvidiaGenerations, nvidiaTiers) # PESQUISA PLACAS DE VIDEO NVIDIA DESDE A GTX1050 PRA CIMA
-    pesquisar_intel_cpu(intelVendor, intelLines, intelGenerations) #PESQUISA PROCESSADORES INTEL CORE DA 10ª A 14ª GERAÇÃO
-    pesquisar_amd_cpu(amdRyzenLines, amdRyzenGenerations, "amd","todos") #PESQUISA PROCESSADORES AMD RYZEN (1 BUSCA POR SKU)
-    pesquisar_amd_cpu() #PESQUISA PROCESSADORES AMD RYZEN (1 BUSCA POR SKU)
-    pesquisar_intel_cpu(intelVendor, intelLines, intelGenerations, "todos") #PESQUISA  OS INTEL CORE COM E SEM VIDEO INTEGRADO
-    pesquisar_amd_gpu(gpuVendors[1],AMDSeries,radeon5HSeries)
-    pesquisar_amd_gpu(gpuVendors[1],AMDSeries,radeon5TSeries)
-    pesquisar_amd_gpu(gpuVendors[1],AMDSeries,radeon6TSeries)
-    pesquisar_amd_gpu(gpuVendors[1],AMDSeries,radeon7TSeries)
-    pesquisar_amd_gpu(gpuVendors[1],AMDSeries,radeon9TSeries)
+    # pesquisa_armazenamento(armazenamentoTypes, armVariant, armazenamentoSizes) #PESQUISA HDS E SSDS
+    # pesquisar_ram(ramSizes, ramTypes) #PESQQQUISA MEMORIAS RAM DDR3 A 5
+    # pesquisar_nvidia(gpuVendors[0], nvidiaSeries, nvidiaGenerations, nvidiaTiers) # PESQUISA PLACAS DE VIDEO NVIDIA DESDE A GTX1050 PRA CIMA
+    # pesquisar_intel_cpu(intelVendor, intelLines, intelGenerations) #PESQUISA PROCESSADORES INTEL CORE DA 10ª A 14ª GERAÇÃO
+    # pesquisar_amd_cpu(amdRyzenLines, amdRyzenGenerations, "amd","todos") #PESQUISA PROCESSADORES AMD RYZEN (1 BUSCA POR SKU)
+    # pesquisar_amd_cpu() #PESQUISA PROCESSADORES AMD RYZEN (1 BUSCA POR SKU)
+    # pesquisar_intel_cpu(intelVendor, intelLines, intelGenerations, "todos") #PESQUISA  OS INTEL CORE COM E SEM VIDEO INTEGRADO
+    # pesquisar_amd_gpu(gpuVendors[1],AMDSeries,radeon5HSeries)
+    # pesquisar_amd_gpu(gpuVendors[1],AMDSeries,radeon5TSeries)
+    # pesquisar_amd_gpu(gpuVendors[1],AMDSeries,radeon6TSeries)
+    # pesquisar_amd_gpu(gpuVendors[1],AMDSeries,radeon7TSeries)
+    # pesquisar_amd_gpu(gpuVendors[1],AMDSeries,radeon9TSeries)
+    # pesquisar_fontes(fontesCapacidade) #PESQUISA FONTES DE ALIMENTAÇÃO 80 PLUS
+    pesquisar_coolers() #PESQUISA COOLERS (AIR/WATER) SIMPLE/RGB/ARGB
