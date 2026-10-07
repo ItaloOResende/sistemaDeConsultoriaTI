@@ -174,7 +174,6 @@ def pesquisar_intel_cpu(vendor, lines, generations, videoIntegrado=None):
             except Exception as e:
                 print(f"Ocorreu um erro ao filtrar os processadores: {e}")
 
-
 def pesquisar_amd_cpu(lines=None, generations=None, vendor="amd", videoIntegrado=None):
     # Limpa o CSV anterior antes de popular os novos
     with open('csvs/preços.csv', 'w', newline='', encoding='utf-8') as f:
@@ -199,22 +198,19 @@ def pesquisar_amd_cpu(lines=None, generations=None, vendor="amd", videoIntegrado
                 print(f"Ocorreu um erro ao filtrar os processadores: {e}")
 
 
-    
-         
-
 #######################FUNCAO MAIN (RODA QUANDO O ARQUIVO.PY E CHAMADO INDIVIDUALMENTE)#############################################
 if __name__ == '__main__':
     # Limpa o CSV anterior antes de popular os novos
-    
-    #pesquisa_armazenamento(armazenamentoTypes, armVariant, armazenamentoSizes) #PESQUISA HDS E SSDS
-    #pesquisar_ram(ramSizes, ramTypes) #PESQQQUISA MEMORIAS RAM DDR3 A 5
-    #pesquisar_nvidia(gpuVendors[0], nvidiaSeries, nvidiaGenerations, nvidiaTiers) # PESQUISA PLACAS DE VIDEO NVIDIA DESDE A GTX1050 PRA CIMA
-    #pesquisar_intel_cpu(intelVendor, intelLines, intelGenerations) #PESQUISA PROCESSADORES INTEL CORE DA 10ª A 14ª GERAÇÃO
+    ###################--FAVOR COMENTAR AS PESQUISAS QUE NAO DESEJA FAZER--#####################################################
+    pesquisa_armazenamento(armazenamentoTypes, armVariant, armazenamentoSizes) #PESQUISA HDS E SSDS
+    pesquisar_ram(ramSizes, ramTypes) #PESQQQUISA MEMORIAS RAM DDR3 A 5
+    pesquisar_nvidia(gpuVendors[0], nvidiaSeries, nvidiaGenerations, nvidiaTiers) # PESQUISA PLACAS DE VIDEO NVIDIA DESDE A GTX1050 PRA CIMA
+    pesquisar_intel_cpu(intelVendor, intelLines, intelGenerations) #PESQUISA PROCESSADORES INTEL CORE DA 10ª A 14ª GERAÇÃO
     pesquisar_amd_cpu(amdRyzenLines, amdRyzenGenerations, "amd","todos") #PESQUISA PROCESSADORES AMD RYZEN (1 BUSCA POR SKU)
-    #pesquisar_amd_cpu() #PESQUISA PROCESSADORES AMD RYZEN (1 BUSCA POR SKU)
-    #pesquisar_intel_cpu(intelVendor, intelLines, intelGenerations, "sim") #PESQUISA APENAS OS INTEL CORE COM SUFIXO K/KS
-    # pesquisar_amd_gpu(gpuVendors[1],AMDSeries,radeon5HSeries)
-    # pesquisar_amd_gpu(gpuVendors[1],AMDSeries,radeon5TSeries)
-    # pesquisar_amd_gpu(gpuVendors[1],AMDSeries,radeon6TSeries)
-    # pesquisar_amd_gpu(gpuVendors[1],AMDSeries,radeon7TSeries)
-    # pesquisar_amd_gpu(gpuVendors[1],AMDSeries,radeon9TSeries)
+    pesquisar_amd_cpu() #PESQUISA PROCESSADORES AMD RYZEN (1 BUSCA POR SKU)
+    pesquisar_intel_cpu(intelVendor, intelLines, intelGenerations, "todos") #PESQUISA  OS INTEL CORE COM E SEM VIDEO INTEGRADO
+    pesquisar_amd_gpu(gpuVendors[1],AMDSeries,radeon5HSeries)
+    pesquisar_amd_gpu(gpuVendors[1],AMDSeries,radeon5TSeries)
+    pesquisar_amd_gpu(gpuVendors[1],AMDSeries,radeon6TSeries)
+    pesquisar_amd_gpu(gpuVendors[1],AMDSeries,radeon7TSeries)
+    pesquisar_amd_gpu(gpuVendors[1],AMDSeries,radeon9TSeries)
