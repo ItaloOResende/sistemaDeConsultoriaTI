@@ -1,3 +1,4 @@
+# Arquivo principal para coordenação das buscas de peças por diferentes lojas
 import sys
 import csv
 import time
@@ -12,58 +13,77 @@ import filtrarArmazenamento
 import filtrarGpus
 import filtrarCpus
 
+# Configurações para busca de memórias RAM
 ramTypes = ["ddr3","ddr4", "ddr5"]
 ramSizes = [ "4gb", "8gb", "16gb"]
+
+# Configurações para busca de placas de vídeo NVIDIA
 gpuVendors = ["nvidia", "amd"]
 nvidiaSeries = ["gtx", "rtx"]
 nvidiaGenerations = ["10", "16", "20", "30", "40", "50"]
 nvidiaTiers = ["50", "60","70","80","90"]
+
+# Configurações para busca de placas de vídeo AMD
 AMDSeries ="rx"
 radeon5HSeries = ["570","580", "590"]
 radeon5TSeries = ["5300","5500", "5600", "5700"]
 radeon6TSeries = ["6300","6400", "6500", "6600","6650", "6700", "6750", "6800", "6900", "6950"]
 radeon7TSeries = ["7400","7600", "7650", "7700", "7800", "7900"]
 radeon9TSeries = ["9050","9060","9070" ]
+
+# Configurações para busca de armazenamento (SSD/HDD)
 armazenamentoTypes = ["ssd", "hdd"]
 armVariant = ["m.2 sata", "m.2 nvme", "sata"]
 armazenamentoSizes = ["128gb", "256gb", "512gb", "1tb", "2tb"]
-intelVendor = "intel"
-intelLines = ["i3", "i5", "i7", "i9"]  # pra incluir os core ultra basta acrescentar aqui
-intelGenerations = ["10", "11", "12", "13", "14"]
-# combinações que não existem no mercado de desktop (evita busca sem resultado)
-intelIndisponiveis = [("11", "i3")]
 
+# Configurações para busca de processadores Intel
+intelVendor = "intel"
+intelLines = ["i3", "i5", "i7", "i9"]  # Para incluir os Core Ultra, basta acrescentar aqui
+intelGenerations = ["8", "9","10", "11", "12", "13", "14"]
+# Combinações que não existem no mercado de desktop (evita busca sem resultado)
+intelIndisponiveis = [("", "")]
+
+# Configurações para busca de processadores AMD Ryzen
+# Séries desktop: 3000 (Zen 2), 5000 (Zen 3), 7000 (Zen 4) e 9000 (Zen 5)
+amdRyzenLines = ["ryzen 3", "ryzen 5", "ryzen 7", "ryzen 9"]
+amdRyzenGenerations = ["3000", "4000","5000", "7000","8000", "9000"]
+# Combinações que não existem no mercado de desktop (evita busca sem resultado)
+# A linha Ryzen 3 parou no 3200G, não tem peça de 7000 nem 9000
+amdRyzenIndisponiveis = [("ryzen 3", "7000"), ("ryzen 3", "9000")]
+
+# Realiza busca em todas as lojas e organiza os resultados
 def pesquisa(busca):
     print(f"Pesquisando por: {busca}...")
+    # Busca na Amazon
     try:
-            buscaAmazon.pesquisa_amazon(busca)
+        buscaAmazon.pesquisa_amazon(busca)
     except Exception as e:
         print(f"Erro Amazon: {e}")
 
-        #pesquisando na Kabum
+    # Busca na Kabum
     try:
         buscaKabbum.pesquisa_kabum(busca)
     except Exception as e:
         print(f"Erro Kabum: {e}")
 
-        #pesquisando na Terabyte
+    # Busca na Terabyte
     try:
         buscaTerabyte.pesquisa_terabyte(busca)
     except Exception as e:
         print(f"Erro Terabyte: {e}")
 
-    #pesquisando na Pichau
+    # Busca na Pichau
     try:
         buscaPichau.pesquisa_pichau(busca)
     except Exception as e:
         print(f"Erro Pichau: {e}")
 
-    #organizando tabela
+    # Organiza os resultados em tabela ordenada por preço
     try:
         fazerTabela.prepara_tabela('csvs/preços.csv')
     except Exception as e:
         print(f"Erro ao gerar tabela: {e}")
-    time.sleep(5)
+    time.sleep(10)
 
 def pesquisar_ram(rsizes, rtypes):
     with open('csvs/preços.csv', 'w', newline='', encoding='utf-8') as f:
@@ -154,6 +174,31 @@ def pesquisar_intel_cpu(vendor, lines, generations, videoIntegrado=None):
             except Exception as e:
                 print(f"Ocorreu um erro ao filtrar os processadores: {e}")
 
+
+def pesquisar_amd_cpu(lines=None, generations=None, vendor="amd", videoIntegrado=None):
+    # Limpa o CSV anterior antes de popular os novos
+    with open('csvs/preços.csv', 'w', newline='', encoding='utf-8') as f:
+        pass
+    print("pesquisando processadores amd ryzen...")
+
+    if lines is None:
+        lines = amdRyzenLines
+    if generations is None:
+        generations = amdRyzenGenerations
+
+    for linha in lines:
+        for g in generations:
+            if (linha, g) in amdRyzenIndisponiveis:
+                continue
+            busca = f"processador {vendor} {linha} {g}"
+            # pesquisa(busca)
+            try:
+                filtrarCpus.filtrar_amd_cpu('csvs/Produtos Ordenados.csv', linha, g, videoIntegrado)
+                print(f"Filtragem de {busca} concluidas ")
+            except Exception as e:
+                print(f"Ocorreu um erro ao filtrar os processadores: {e}")
+
+
     
          
 
@@ -165,9 +210,11 @@ if __name__ == '__main__':
     #pesquisar_ram(ramSizes, ramTypes) #PESQQQUISA MEMORIAS RAM DDR3 A 5
     #pesquisar_nvidia(gpuVendors[0], nvidiaSeries, nvidiaGenerations, nvidiaTiers) # PESQUISA PLACAS DE VIDEO NVIDIA DESDE A GTX1050 PRA CIMA
     #pesquisar_intel_cpu(intelVendor, intelLines, intelGenerations) #PESQUISA PROCESSADORES INTEL CORE DA 10ª A 14ª GERAÇÃO
+    pesquisar_amd_cpu(amdRyzenLines, amdRyzenGenerations, "amd","todos") #PESQUISA PROCESSADORES AMD RYZEN (1 BUSCA POR SKU)
+    #pesquisar_amd_cpu() #PESQUISA PROCESSADORES AMD RYZEN (1 BUSCA POR SKU)
     #pesquisar_intel_cpu(intelVendor, intelLines, intelGenerations, "sim") #PESQUISA APENAS OS INTEL CORE COM SUFIXO K/KS
-    pesquisar_amd_gpu(gpuVendors[1],AMDSeries,radeon5HSeries)
-    pesquisar_amd_gpu(gpuVendors[1],AMDSeries,radeon5TSeries)
-    pesquisar_amd_gpu(gpuVendors[1],AMDSeries,radeon6TSeries)
-    pesquisar_amd_gpu(gpuVendors[1],AMDSeries,radeon7TSeries)
-    pesquisar_amd_gpu(gpuVendors[1],AMDSeries,radeon9TSeries)
+    # pesquisar_amd_gpu(gpuVendors[1],AMDSeries,radeon5HSeries)
+    # pesquisar_amd_gpu(gpuVendors[1],AMDSeries,radeon5TSeries)
+    # pesquisar_amd_gpu(gpuVendors[1],AMDSeries,radeon6TSeries)
+    # pesquisar_amd_gpu(gpuVendors[1],AMDSeries,radeon7TSeries)
+    # pesquisar_amd_gpu(gpuVendors[1],AMDSeries,radeon9TSeries)

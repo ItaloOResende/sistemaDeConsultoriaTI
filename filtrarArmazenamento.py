@@ -1,3 +1,4 @@
+# Filtra dispositivos de armazenamento (SSD/HDD) por tipo, variante e capacidade
 import pandas as pd
 
 pd.set_option('display.max_columns', None)
@@ -8,14 +9,15 @@ aFiltrar = "csvs/Produtos Ordenados.csv"
 
 
 def filtrar_amazenamento(file_path, armType, armVariant, armSize):
-    print('Filtando SSDs...')
-    csvName= f"csvs/{armType}_{armVariant}_{armSize}.csv" 
+    print('Filtando armazenamento...')
+    csvName = f"csvs/{armType}_{armVariant}_{armSize}.csv"
 
     try:
         df = pd.read_csv(file_path, encoding='latin1', skiprows=1, header=None, names=['Produto', 'Preço', 'Link'])
 
         df["Preço"] = pd.to_numeric(df["Preço"])
         dfOrdenado = df.sort_values(by='Preço', ascending=True).reset_index(drop=True)
+        # Define filtros para tamanho
         match armSize.lower():
             case "128gb":
                 sizeFilter = "120gb|128gb"
