@@ -1,4 +1,4 @@
-# Filtra gabinetes por tamanho (mini tower / mid tower / full tower)
+# Filtra placas-mãe por soquete (LGA ****, AM*)
 import re
 import pandas as pd
 
@@ -10,7 +10,7 @@ aFiltrar = "csvs/Produtos Ordenados.csv"
 
 
 def identificar_tamanho(produto):
-    """Extrai o tamanho da placa-mãe suportado a partir do título do gabinete.
+    """Extrai o tamanho (form factor) da placa-mãe a partir do título.
 
     Reconhece E-ATX, Mini-ITX, Mini-ATX, Micro-ATX (mATX) e ATX.
     Retorna string vazia quando o título não informa o tamanho.
@@ -29,29 +29,30 @@ def identificar_tamanho(produto):
     return ""
 
 
-def filtrar_gabinetes(file_path, tipo):
-    print(f'filtrando gabinetes {tipo}...')
-    csvName = f"csvs/gabinete_{tipo.replace(' ', '_')}.csv"
+def filtrar_placas_mae(file_path, soquete):
+    print(f'filtrando placas-mae {soquete}...')
+    csvName = f"csvs/placa_mae_{soquete.replace(' ', '_').lower()}.csv"
 
     try:
         df = pd.read_csv(file_path, encoding='latin1', skiprows=1, header=None, names=['Produto', 'Preço', 'Link'])
 
         df["Preço"] = pd.to_numeric(df["Preço"], errors='coerce')
         dfOrdenado = df.dropna(subset=["Preço"]).sort_values(by='Preço', ascending=True).reset_index(drop=True)
-        # Filtra por tamanho (aceita "mid tower", "mid-tower" e "Mid Tower")
-        tipoFilter = rf"{tipo.replace(' ', r'[\s-]+')}"
-        dfFiltrado = dfOrdenado[dfOrdenado['Produto'].str.contains(tipoFilter, case=False, na=False, regex=True)]
-        # Só gabinetes no título
-        dfFiltrado = dfFiltrado[dfFiltrado['Produto'].str.contains("gabinete|case", case=False, na=False)]
-        # Exclui peças que não são gabinetes
-        dfFiltrado = dfFiltrado[~dfFiltrado['Produto'].str.contains("notebook|pc gamer|fonte|processador|cooler", case=False, na=False)]
+        # Filtra por soquete (aceita "LGA 1700", "LGA1700" e "AM4")
+        padrao = re.escape(soquete).replace(r'\ ', r'[\s-]*')
+        soqueteFilter = rf"\b{padrao}\b"
+        dfFiltrado = dfOrdenado[dfOrdenado['Produto'].str.contains(soqueteFilter, case=False, na=False, regex=True)]
+        # Só placas-mãe no título
+        dfFiltrado = dfFiltrado[dfFiltrado['Produto'].str.contains(r"placa[\s-]*m[ãa]e|motherboard", case=False, na=False, regex=True)]
+        # Exclui peças que não são placas-mãe
+        dfFiltrado = dfFiltrado[~dfFiltrado['Produto'].str.contains("notebook|processador|memoria|mem[oó]ria|ssd|fonte|gabinete|cooler|water cooler|pc gamer", case=False, na=False)]
 
         # Adiciona o tamanho logo após o Produto: Produto, Tamanho, Preço, Link
         dfFiltrado.insert(1, "Tamanho", dfFiltrado['Produto'].map(identificar_tamanho))
 
         dfFiltrado.to_csv(csvName, index=False)
         if dfFiltrado.empty:
-            print(f"nenhum gabinete {tipo} encontrado")
+            print(f"nenhuma placa-mae {soquete} encontrada")
             return None
         return pd.read_csv(csvName, nrows=10)
     except Exception as e:
@@ -60,4 +61,4 @@ def filtrar_gabinetes(file_path, tipo):
 
 
 if __name__ == '__main__':
-    print(filtrar_gabinetes(aFiltrar, "mid tower"))
+    print(filtrar_placas_mae(aFiltrar, "AM4"))

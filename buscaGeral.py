@@ -15,6 +15,7 @@ import filtrarCpus
 import filtrarFontes
 import filtrarCoolers
 import filtrarGabinetes
+import filtrarPlacasMae
 
 # Configurações para busca de memórias RAM
 ramTypes = ["ddr3","ddr4", "ddr5"]
@@ -61,6 +62,9 @@ coolerEstilos = ["simples", "rgb", "argb"]
 
 # Configurações para busca de gabinetes
 gabinetesTipos = ["mini tower", "mid tower", "full tower"]
+
+# Configurações para busca de placas-mãe (separadas por soquete)
+placasMaeSoquetes = ["LGA 1151", "LGA 1200", "LGA 1700", "AM4", "AM5"]
 
 # Realiza busca em todas as lojas e organiza os resultados
 def pesquisa(busca):
@@ -261,12 +265,30 @@ def pesquisar_gabinetes(tipos=None):
 
     for tipo in tipos:
         busca = f"gabinete {tipo}"
-        pesquisa(busca)
+        #pesquisa(busca)
         try:
             filtrarGabinetes.filtrar_gabinetes('csvs/Produtos Ordenados.csv', tipo)
             print(f"Filtragem de {busca} concluidas ")
         except Exception as e:
             print(f"Ocorreu um erro ao filtrar os gabinetes: {e}")
+
+def pesquisar_placas_mae(soquetes=None):
+    # Limpa o CSV anterior antes de popular os novos
+    with open('csvs/preços.csv', 'w', newline='', encoding='utf-8') as f:
+        pass
+    print("pesquisando placas-mae...")
+
+    if soquetes is None:
+        soquetes = placasMaeSoquetes
+
+    for soquete in soquetes:
+        busca = f"placa mae {soquete}"
+        pesquisa(busca)
+        try:
+            filtrarPlacasMae.filtrar_placas_mae('csvs/Produtos Ordenados.csv', soquete)
+            print(f"Filtragem de {busca} concluidas ")
+        except Exception as e:
+            print(f"Ocorreu um erro ao filtrar as placas-mae: {e}")
 
 #######################FUNCAO MAIN (RODA QUANDO O ARQUIVO.PY E CHAMADO INDIVIDUALMENTE)#############################################
 if __name__ == '__main__':
@@ -285,5 +307,6 @@ if __name__ == '__main__':
     # pesquisar_amd_gpu(gpuVendors[1],AMDSeries,radeon7TSeries)
     # pesquisar_amd_gpu(gpuVendors[1],AMDSeries,radeon9TSeries)
     # pesquisar_fontes(fontesCapacidade) #PESQUISA FONTES DE ALIMENTAÇÃO 80 PLUS
+    # pesquisar_placas_mae(placasMaeSoquetes) #PESQUISA PLACAS-MAE POR SOQUETE (LGA/AM)
     pesquisar_gabinetes(gabinetesTipos) #PESQUISA GABINETES (MINI/MID/FULL TOWER)
     # pesquisar_coolers() #PESQUISA COOLERS (AIR/WATER) SIMPLE/RGB/ARGB
