@@ -14,6 +14,7 @@ import filtrarGpus
 import filtrarCpus
 import filtrarFontes
 import filtrarCoolers
+import filtrarGabinetes
 
 # Configurações para busca de memórias RAM
 ramTypes = ["ddr3","ddr4", "ddr5"]
@@ -57,6 +58,9 @@ fontesCapacidade = ["400w", "500w","550W", "600w", "650W", "700w", "750W", "800w
 # Configurações para busca de coolers
 coolerTipos = ["air cooler", "water cooler"]
 coolerEstilos = ["simples", "rgb", "argb"]
+
+# Configurações para busca de gabinetes
+gabinetesTipos = ["mini tower", "mid tower", "full tower"]
 
 # Realiza busca em todas as lojas e organiza os resultados
 def pesquisa(busca):
@@ -246,6 +250,24 @@ def pesquisar_fontes(capacidades=None):
         except Exception as e:
             print(f"Ocorreu um erro ao filtrar as fontes: {e}")
 
+def pesquisar_gabinetes(tipos=None):
+    # Limpa o CSV anterior antes de popular os novos
+    with open('csvs/preços.csv', 'w', newline='', encoding='utf-8') as f:
+        pass
+    print("pesquisando gabinetes...")
+
+    if tipos is None:
+        tipos = gabinetesTipos
+
+    for tipo in tipos:
+        busca = f"gabinete {tipo}"
+        pesquisa(busca)
+        try:
+            filtrarGabinetes.filtrar_gabinetes('csvs/Produtos Ordenados.csv', tipo)
+            print(f"Filtragem de {busca} concluidas ")
+        except Exception as e:
+            print(f"Ocorreu um erro ao filtrar os gabinetes: {e}")
+
 #######################FUNCAO MAIN (RODA QUANDO O ARQUIVO.PY E CHAMADO INDIVIDUALMENTE)#############################################
 if __name__ == '__main__':
     # Limpa o CSV anterior antes de popular os novos
@@ -263,4 +285,5 @@ if __name__ == '__main__':
     # pesquisar_amd_gpu(gpuVendors[1],AMDSeries,radeon7TSeries)
     # pesquisar_amd_gpu(gpuVendors[1],AMDSeries,radeon9TSeries)
     # pesquisar_fontes(fontesCapacidade) #PESQUISA FONTES DE ALIMENTAÇÃO 80 PLUS
-    pesquisar_coolers() #PESQUISA COOLERS (AIR/WATER) SIMPLE/RGB/ARGB
+    pesquisar_gabinetes(gabinetesTipos) #PESQUISA GABINETES (MINI/MID/FULL TOWER)
+    # pesquisar_coolers() #PESQUISA COOLERS (AIR/WATER) SIMPLE/RGB/ARGB
