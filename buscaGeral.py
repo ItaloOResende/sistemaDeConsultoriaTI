@@ -90,26 +90,34 @@ def pesquisar_ram(rsizes, rtypes):
     with open('csvs/preços.csv', 'w', newline='', encoding='utf-8') as f:
             pass
     print("pesquisando memorias ram...")
+    pool = ThreadPoolExecutor(max_workers=4)
+    resultados = []
+    buscas = []
     for rtype in rtypes:
         for rsize in rsizes:
             if rtype == "ddr5" and rsize == "4gb":
                 continue  # Pula a combinação de DDR5 com 4GB, pois não existe
-            busca = f"memoria ram {rtype} {rsize}"
-            print (f"Pesquisando por: {busca}...")
-            
+            buscas.append((rtype, rsize, f"memoria ram {rtype} {rsize}"))
 
-            #pesquisando na Amazon
-            pesquisa(busca)
-            try:
-                filtrarRam.filtrar_memoria_desktop('csvs/Produtos Ordenados.csv', rtype, rsize)
-                print(f"Filtragem de {busca} concluidas ")
-                
-            except Exception as e:
-                print(f"Ocorreu um erro  ao filtrar as memorias: {e}")
+    # Dispara todas as buscas em paralelo
+    for rtype, rsize, busca in buscas:
+        resultados.append(pool.submit(pesquisa, busca))
+    pool.shutdown(wait=True)
+
+    # Filtra os resultados de cada busca
+    for rtype, rsize, busca in buscas:
+        try:
+            filtrarRam.filtrar_memoria_desktop('csvs/Produtos Ordenados.csv', rtype, rsize)
+            print(f"Filtragem de {busca} concluidas ")
+        except Exception as e:
+            print(f"Ocorreu um erro  ao filtrar as memorias: {e}")
 
 def pesquisa_armazenamento(armType, armVariant, armSize):
     with open('csvs/preços.csv', 'w', newline='', encoding='utf-8') as f:
         pass
+    pool = ThreadPoolExecutor(max_workers=4)
+    resultados = []
+    buscas = []
     for t in armType:
         for v in armVariant:
             if t == "hdd":
@@ -119,43 +127,66 @@ def pesquisa_armazenamento(armType, armVariant, armSize):
                 if t == "hdd":
                    if s in ("128gb", "256gb"):
                        continue
-                busca  = f"{t} {v} {s}"
-                pesquisa(busca)
-                filtrarArmazenamento.filtrar_amazenamento('csvs/Produtos Ordenados.csv', t,v,s)
+                buscas.append((t, v, s, f"{t} {v} {s}"))
+
+    # Dispara todas as buscas em paralelo
+    for t, v, s, busca in buscas:
+        resultados.append(pool.submit(pesquisa, busca))
+    pool.shutdown(wait=True)
+
+    # Filtra os resultados de cada busca
+    for t, v, s, busca in buscas:
+        filtrarArmazenamento.filtrar_amazenamento('csvs/Produtos Ordenados.csv', t,v,s)
     
 def pesquisar_nvidia(vendor, series,generations,tiers):
     
     with open('csvs/preços.csv', 'w', newline='', encoding='utf-8') as f:
             pass
+    pool = ThreadPoolExecutor(max_workers=4)
+    resultados = []
+    buscas = []
     #pesquisando e filtrando
     for g in generations:
                 for t in tiers:
                     if g == "10":
                         if int(t) < 80:
-                            busca = f"{vendor} {series[0]} {g}{t}"
-                            filtrarGpus.filtrar_nvidia('csvs/Produtos Ordenados.csv', series[0], g, t)
+                            buscas.append((f"{vendor} {series[0]} {g}{t}", series[0], g, t))
                     elif g == '16':
                             if int(t) < 60:
-                                busca = f"{vendor} {series[0]} {g}{t}"
-                                filtrarGpus.filtrar_nvidia('csvs/Produtos Ordenados.csv', series[0], g, t)
+                                buscas.append((f"{vendor} {series[0]} {g}{t}", series[0], g, t))
                     elif int(g) > 16 and int(g) < 40:
                         if int(t) > 30 and int(t) < 90:
-                            busca = f"{vendor} {series[1]} {g}{t}"
-                            filtrarGpus.filtrar_nvidia('csvs/Produtos Ordenados.csv', series[0], g, t)
+                            buscas.append((f"{vendor} {series[1]} {g}{t}", series[0], g, t))
                     elif int(g) >= 40:
                         if int(t) > 30:
-                            busca = f"{vendor} {series[1]} {g}{t}"
-                            filtrarGpus.filtrar_nvidia('csvs/Produtos Ordenados.csv', series[0], g, t)
-                    
-                    pesquisa(busca)
+                            buscas.append((f"{vendor} {series[1]} {g}{t}", series[0], g, t))
+
+    # Dispara todas as buscas em paralelo
+    for busca, s, g, t in buscas:
+        resultados.append(pool.submit(pesquisa, busca))
+    pool.shutdown(wait=True)
+
+    # Filtra os resultados de cada busca
+    for busca, s, g, t in buscas:
+        filtrarGpus.filtrar_nvidia('csvs/Produtos Ordenados.csv', s, g, t)
 
 def pesquisar_amd_gpu(vendor,series,generations):
     # Limpa o CSV anterior antes de popular os novos
     with open('csvs/preços.csv', 'w', newline='', encoding='utf-8') as f:
         pass
+    pool = ThreadPoolExecutor(max_workers=4)
+    resultados = []
+    buscas = []
     for g in generations:
-        busca = f"{vendor} radeon {series} {g}"
-        pesquisa(busca)
+        buscas.append((g, f"{vendor} radeon {series} {g}"))
+
+    # Dispara todas as buscas em paralelo
+    for g, busca in buscas:
+        resultados.append(pool.submit(pesquisa, busca))
+    pool.shutdown(wait=True)
+
+    # Filtra os resultados de cada busca
+    for g, busca in buscas:
         filtrarGpus.filtrar_amd_gpu("csvs/Produtos Ordenados.csv",vendor,series,g)
 
 def pesquisar_intel_cpu(vendor, lines, generations, videoIntegrado=None):
@@ -163,17 +194,27 @@ def pesquisar_intel_cpu(vendor, lines, generations, videoIntegrado=None):
     with open('csvs/preços.csv', 'w', newline='', encoding='utf-8') as f:
         pass
     print("pesquisando processadores intel...")
+    pool = ThreadPoolExecutor(max_workers=4)
+    resultados = []
+    buscas = []
     for linha in lines:
         for g in generations:
             if (g, linha) in intelIndisponiveis:
                 continue  # Pula combinações que não existem em desktop
-            busca = f"processador {vendor} core {linha} {g} geracao"
-            pesquisa(busca)
-            try:
-                filtrarCpus.filtrar_intel_cpu('csvs/Produtos Ordenados.csv', linha, g)
-                print(f"Filtragem de {busca} concluidas ")
-            except Exception as e:
-                print(f"Ocorreu um erro ao filtrar os processadores: {e}")
+            buscas.append((linha, g, f"processador {vendor} core {linha} {g} geracao"))
+
+    # Dispara todas as buscas em paralelo
+    for linha, g, busca in buscas:
+        resultados.append(pool.submit(pesquisa, busca))
+    pool.shutdown(wait=True)
+
+    # Filtra os resultados de cada busca
+    for linha, g, busca in buscas:
+        try:
+            filtrarCpus.filtrar_intel_cpu('csvs/Produtos Ordenados.csv', linha, g)
+            print(f"Filtragem de {busca} concluidas ")
+        except Exception as e:
+            print(f"Ocorreu um erro ao filtrar os processadores: {e}")
 
 def pesquisar_amd_cpu(lines=None, generations=None, vendor="amd"):
     # Limpa o CSV anterior antes de popular os novos
@@ -185,18 +226,28 @@ def pesquisar_amd_cpu(lines=None, generations=None, vendor="amd"):
         lines = amdRyzenLines
     if generations is None:
         generations = amdRyzenGenerations
-    
+
+    pool = ThreadPoolExecutor(max_workers=4)
+    resultados = []
+    buscas = []
     for linha in lines:
         for g in generations:
             if (linha, g) in amdRyzenIndisponiveis:
                 continue
-            busca = f"processador {vendor} {linha} {g}"
-            pesquisa(busca)
-            try:
-                filtrarCpus.filtrar_amd_cpu('csvs/Produtos Ordenados.csv', linha, g)
-                print(f"Filtragem de {busca} concluidas ")
-            except Exception as e:
-                print(f"Ocorreu um erro ao filtrar os processadores: {e}")
+            buscas.append((linha, g, f"processador {vendor} {linha} {g}"))
+
+    # Dispara todas as buscas em paralelo
+    for linha, g, busca in buscas:
+        resultados.append(pool.submit(pesquisa, busca))
+    pool.shutdown(wait=True)
+
+    # Filtra os resultados de cada busca
+    for linha, g, busca in buscas:
+        try:
+            filtrarCpus.filtrar_amd_cpu('csvs/Produtos Ordenados.csv', linha, g)
+            print(f"Filtragem de {busca} concluidas ")
+        except Exception as e:
+            print(f"Ocorreu um erro ao filtrar os processadores: {e}")
 
 def pesquisar_coolers(tipos=None, estilos=None):
     with open('csvs/preços.csv', 'w', newline='', encoding='utf-8') as f:
@@ -206,20 +257,28 @@ def pesquisar_coolers(tipos=None, estilos=None):
         tipos = coolerTipos
     if estilos is None:
         estilos = coolerEstilos
+    pool = ThreadPoolExecutor(max_workers=4)
+    resultados = []
     buscas = []
     for tipo in tipos:
         for estilo in estilos:
             if estilo == "simple":
-                buscas.append(f"{tipo}")
+                buscas.append((tipo, estilo, f"{tipo}"))
             else:
-                buscas.append(f"{tipo} {estilo}")
-    for busca in buscas:
-        pesquisa(busca)
+                buscas.append((tipo, estilo, f"{tipo} {estilo}"))
+
+    # Dispara todas as buscas em paralelo
+    for tipo, estilo, busca in buscas:
+        resultados.append(pool.submit(pesquisa, busca))
+    pool.shutdown(wait=True)
+
+    # Filtra os resultados de cada busca
+    for tipo, estilo, busca in buscas:
         try:
             filtrarCoolers.filtrar_coolers('csvs/Produtos Ordenados.csv', tipo, estilo)
             print(f"Filtragem de {busca} concluidas ")
         except Exception as e:
-            print(f"Ocorreu um erro ao filtrar os coolers: {e}")        
+            print(f"Ocorreu um erro ao filtrar os coolers: {e}")
     
 
 def pesquisar_fontes(capacidades=None):
@@ -231,9 +290,19 @@ def pesquisar_fontes(capacidades=None):
     if capacidades is None:
         capacidades = fontesCapacidade
 
+    pool = ThreadPoolExecutor(max_workers=4)
+    resultados = []
+    buscas = []
     for capacidade in capacidades:
-        busca = f"fonte {capacidade} 80 plus"
-        pesquisa(busca)
+        buscas.append((capacidade, f"fonte {capacidade} 80 plus"))
+
+    # Dispara todas as buscas em paralelo
+    for capacidade, busca in buscas:
+        resultados.append(pool.submit(pesquisa, busca))
+    pool.shutdown(wait=True)
+
+    # Filtra os resultados de cada busca
+    for capacidade, busca in buscas:
         try:
             filtrarFontes.filtrar_fontes('csvs/Produtos Ordenados.csv', capacidade)
             print(f"Filtragem de {busca} concluidas ")
@@ -248,7 +317,7 @@ def pesquisar_gabinetes(tipos=None):
 
     if tipos is None:
         tipos = gabinetesTipos
-    pool = ThreadPoolExecutor(max_workers=3)
+    pool = ThreadPoolExecutor(max_workers=4)
     resultados = []
     buscas = []
     for tipo in tipos:
@@ -273,9 +342,19 @@ def pesquisar_placas_mae(soquetes=None):
     if soquetes is None:
         soquetes = placasMaeSoquetes
 
+    pool = ThreadPoolExecutor(max_workers=4)
+    resultados = []
+    buscas = []
     for soquete in soquetes:
-        busca = f"placa mae {soquete}"
-        pesquisa(busca)
+        buscas.append((soquete, f"placa mae {soquete}"))
+
+    # Dispara todas as buscas em paralelo
+    for soquete, busca in buscas:
+        resultados.append(pool.submit(pesquisa, busca))
+    pool.shutdown(wait=True)
+
+    # Filtra os resultados de cada busca
+    for soquete, busca in buscas:
         try:
             filtrarPlacasMae.filtrar_placas_mae('csvs/Produtos Ordenados.csv', soquete)
             print(f"Filtragem de {busca} concluidas ")
@@ -287,22 +366,22 @@ if __name__ == '__main__':
     # Limpa o CSV anterior antes de popular os novos
     ###################--FAVOR COMENTAR AS PESQUISAS QUE NAO DESEJA FAZER--#####################################################
     start_time = time.perf_counter()
-    # pesquisa_armazenamento(armazenamentoTypes, armVariant, armazenamentoSizes) #PESQUISA HDS E SSDS
-    # pesquisar_ram(ramSizes, ramTypes) #PESQQQUISA MEMORIAS RAM DDR3 A 5
-    # pesquisar_nvidia(gpuVendors[0], nvidiaSeries, nvidiaGenerations, nvidiaTiers) # PESQUISA PLACAS DE VIDEO NVIDIA DESDE A GTX1050 PRA CIMA
-    #pesquisar_intel_cpu(intelVendor, intelLines, intelGenerations) #PESQUISA PROCESSADORES INTEL CORE DA 10ª A 14ª GERAÇÃO
-    # pesquisar_amd_cpu(amdRyzenLines, amdRyzenGenerations, "amd",) #PESQUISA PROCESSADORES AMD RYZEN (1 BUSCA POR SKU)
-    # pesquisar_amd_cpu() #PESQUISA PROCESSADORES AMD RYZEN (1 BUSCA POR SKU)
-    # pesquisar_intel_cpu(intelVendor, intelLines, intelGenerations, "todos") #PESQUISA  OS INTEL CORE COM E SEM VIDEO INTEGRADO
-    # pesquisar_amd_gpu(gpuVendors[1],AMDSeries,radeon5HSeries)
-    # pesquisar_amd_gpu(gpuVendors[1],AMDSeries,radeon5TSeries)
-    # pesquisar_amd_gpu(gpuVendors[1],AMDSeries,radeon6TSeries)
-    # pesquisar_amd_gpu(gpuVendors[1],AMDSeries,radeon7TSeries)
-    # pesquisar_amd_gpu(gpuVendors[1],AMDSeries,radeon9TSeries)
-    # pesquisar_fontes(fontesCapacidade) #PESQUISA FONTES DE ALIMENTAÇÃO 80 PLUS
-    # pesquisar_placas_mae(placasMaeSoquetes) #PESQUISA PLACAS-MAE POR SOQUETE (LGA/AM)
+    pesquisa_armazenamento(armazenamentoTypes, armVariant, armazenamentoSizes) #PESQUISA HDS E SSDS
+    pesquisar_ram(ramSizes, ramTypes) #PESQQQUISA MEMORIAS RAM DDR3 A 5
+    pesquisar_nvidia(gpuVendors[0], nvidiaSeries, nvidiaGenerations, nvidiaTiers) # PESQUISA PLACAS DE VIDEO NVIDIA DESDE A GTX1050 PRA CIMA
+    pesquisar_intel_cpu(intelVendor, intelLines, intelGenerations) #PESQUISA PROCESSADORES INTEL CORE DA 10ª A 14ª GERAÇÃO
+    pesquisar_amd_cpu(amdRyzenLines, amdRyzenGenerations, "amd",) #PESQUISA PROCESSADORES AMD RYZEN (1 BUSCA POR SKU)
+    pesquisar_amd_cpu() #PESQUISA PROCESSADORES AMD RYZEN (1 BUSCA POR SKU)
+    pesquisar_intel_cpu(intelVendor, intelLines, intelGenerations, "todos") #PESQUISA  OS INTEL CORE COM E SEM VIDEO INTEGRADO
+    pesquisar_amd_gpu(gpuVendors[1],AMDSeries,radeon5HSeries)
+    pesquisar_amd_gpu(gpuVendors[1],AMDSeries,radeon5TSeries)
+    pesquisar_amd_gpu(gpuVendors[1],AMDSeries,radeon6TSeries)
+    pesquisar_amd_gpu(gpuVendors[1],AMDSeries,radeon7TSeries)
+    pesquisar_amd_gpu(gpuVendors[1],AMDSeries,radeon9TSeries)
+    pesquisar_fontes(fontesCapacidade) #PESQUISA FONTES DE ALIMENTAÇÃO 80 PLUS
+    pesquisar_placas_mae(placasMaeSoquetes) #PESQUISA PLACAS-MAE POR SOQUETE (LGA/AM)
     pesquisar_gabinetes(gabinetesTipos) #PESQUISA GABINETES (MINI/MID/FULL TOWER)
-    # pesquisar_coolers() #PESQUISA COOLERS (AIR/WATER) SIMPLE/RGB/ARGB
+    pesquisar_coolers() #PESQUISA COOLERS (AIR/WATER) SIMPLE/RGB/ARGB
     end_time = time.perf_counter()
     execution_time = end_time - start_time
     print(f"Execution time: {execution_time:.6f} seconds")

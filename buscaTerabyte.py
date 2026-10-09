@@ -24,6 +24,8 @@ def pesquisa_terabyte(busca):
             viewport={"width": 1920, "height": 1080},
             device_scale_factor=1,
         )
+        context.route("**/*", lambda route: route.abort() 
+                             if route.request.resource_type in ["image", "stylesheet", "font", "media"] else route.continue_())
         pagina = context.new_page()
 
         # Remove a propriedade 'navigator.webdriver'

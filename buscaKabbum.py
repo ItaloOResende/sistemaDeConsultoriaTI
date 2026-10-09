@@ -13,6 +13,8 @@ def pesquisa_kabum(busca):
         # Inicia navegador em modo headless
         navegador = pw.chromium.launch(headless=True)
         pagina = navegador.new_page()
+        pagina.route("**/*", lambda route: route.abort() 
+                     if route.request.resource_type in ["image", "stylesheet", "font", "media"] else route.continue_())
         print(f"Acessando a Kabum...")
         pagina.goto(url)
 
