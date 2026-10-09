@@ -13,12 +13,12 @@ def pesquisa_kabum(busca):
         # Inicia navegador em modo headless
         navegador = pw.chromium.launch(headless=True)
         pagina = navegador.new_page()
-        print(f"Acessando a URL: {url}...")
+        print(f"Acessando a Kabum...")
         pagina.goto(url)
 
         # Encontra todos os produtos por meio dos links que contêm '/produto/'
         lista = pagina.locator("a[href*='/produto/']").all()
-        print(f' achados {len(lista)} produtos na Kabum...')
+        print(f' achados {len(lista)} {busca} na Kabum...')
 
         f = open(arquivo, 'a', encoding='utf-8', newline='')
         writer = csv.writer(f)
@@ -33,11 +33,15 @@ def pesquisa_kabum(busca):
                 produtofinal = (titulo.replace(",", ""), preco, link)
                 writer.writerow(produtofinal)
                 pass
+            resultado = "concluido"
         except Exception as e:
             print(f"Ocorreu um erro ao registrar os itens da Kabum: {e}")
+            resultado = "erro"
         f.close()
 
         navegador.close()
+
+    return resultado
 
 if __name__ == '__main__':
    pesquisa_kabum('memoria ddr4')

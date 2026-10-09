@@ -16,14 +16,19 @@ def identificar_tamanho(produto):
     Retorna string vazia quando o título não informa o tamanho.
     """
     texto = str(produto).lower()
+    # \b = limite de palavra; [\s-]* aceita "E-ATX", "E ATX" e "EATX"
     if re.search(r"\be[\s-]*atx\b", texto):
         return "E-ATX"
+    # \bmini[\s-]*itx\b pega "Mini-ITX"/"Mini ITX"; o \bitx\b alternativo pega "ITX" isolado
     if re.search(r"\bmini[\s-]*itx\b|\bitx\b", texto):
         return "Mini-ITX"
+    # "Mini ATX" / "Mini-ATX" (formato raro, por isso vem antes do ATX comum)
     if re.search(r"\bmini[\s-]*atx\b", texto):
         return "Mini-ATX"
+    # (?:micro|m|u|µ) cobre "Micro-ATX", "mATX", "uATX" e "µATX"; [\s-]* aceita separador
     if re.search(r"\b(?:micro|m|u|µ)[\s-]*atx\b", texto):
         return "Micro-ATX"
+    # ATX "puro" é checado por último, senão casaria dentro de "Micro-ATX"/"E-ATX"
     if re.search(r"\batx\b", texto):
         return "ATX"
     return ""
@@ -38,12 +43,13 @@ def filtrar_gabinetes(file_path, tipo):
 
         df["Preço"] = pd.to_numeric(df["Preço"], errors='coerce')
         dfOrdenado = df.dropna(subset=["Preço"]).sort_values(by='Preço', ascending=True).reset_index(drop=True)
-        # Filtra por tamanho (aceita "mid tower", "mid-tower" e "Mid Tower")
+        # Filtra por tamanho (aceita "mid tower", "mid-tower" e "Mid Tower"):
+        # o espaço do tipo vira [\s-]+ (um ou mais espaços/hífens)
         tipoFilter = rf"{tipo.replace(' ', r'[\s-]+')}"
         dfFiltrado = dfOrdenado[dfOrdenado['Produto'].str.contains(tipoFilter, case=False, na=False, regex=True)]
-        # Só gabinetes no título
+        # Só gabinetes no título ("gabinete" ou "case")
         dfFiltrado = dfFiltrado[dfFiltrado['Produto'].str.contains("gabinete|case", case=False, na=False)]
-        # Exclui peças que não são gabinetes
+        # Exclui peças que não são gabinetes (alternância simples de palavras)
         dfFiltrado = dfFiltrado[~dfFiltrado['Produto'].str.contains("notebook|pc gamer|fonte|processador|cooler", case=False, na=False)]
 
         # Adiciona o tamanho logo após o Produto: Produto, Tamanho, Preço, Link

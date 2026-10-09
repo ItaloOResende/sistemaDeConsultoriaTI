@@ -32,7 +32,7 @@ def pesquisa_pichau(busca):
         print(f"Acessando a Pichau...")
 
         try:
-            itens = getItens(pagina, url, 0)
+            itens = getItens(pagina, url, busca, 0)
             pass
         except Exception as e:
             print(f"Ocorreu um erro ao buscar os itens da Pichau: {e}")
@@ -50,13 +50,16 @@ def pesquisa_pichau(busca):
                 produto = (titulo, preco, linkfull)
                 writer.writerow(produto)
                 pass
+            resultado = "concluido"
         except Exception as e:
             print(f"Ocorreu um erro ao registrar os itens da Pichau: {e}")
-
+            resultado = "erro"
+        f.close()
         navegador.close()
+    return resultado
 
 # Obtém itens da Pichau com tentativas de recarga
-def getItens(pagina, url, tentativas):
+def getItens(pagina, url, busca, tentativas):
     tentativas += 1
     if tentativas == 5:
         return 0
@@ -65,14 +68,14 @@ def getItens(pagina, url, tentativas):
         pagina.goto(url)
         produtos = pagina.locator(seletor_produto).filter(has_text='R$').all()
         if len(produtos) > 0:
-            print(f"encontrados {len(produtos)} itens")
+            print(f"encontrados {len(produtos)} {busca} na Pichau...")
             return produtos
         else:
-            print(f"encontrados {len(produtos)} itens")
+            print(f"encontrados {len(produtos)} {busca} na Pichau...")
             print("tentando novamente")
             time.sleep(5)
 
-            return getItens(pagina, url, tentativas)
+            return getItens(pagina, url, busca, tentativas)
     
     
 

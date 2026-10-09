@@ -29,8 +29,8 @@ def prepara_tabela(file_path):
         dfOrdenado.to_csv('csvs/Produtos Ordenados.csv', index=False)
         return pd.read_csv('csvs/Produtos Ordenados.csv', header=None)
     except Exception as e:
-        print(f"Ocorreu um erro ao organizar o arquivo CSV: {e}")
-        return None
+        resultado = f"Ocorreu um erro ao organizar o arquivo CSV: {e}"
+        return resultado
 
 if __name__ == '__main__':
     print(prepara_tabela('csvs/preços.csv'))

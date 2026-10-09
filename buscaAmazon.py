@@ -33,7 +33,7 @@ def pesquisa_amazon(busca):
         pagina = context.new_page()
         print(f"Acessando a Amazon...")
 
-        itens = getItens(pagina, url)
+        itens = getItens(pagina, url,busca)
         escopo = len(itens) - 8
         try:
             # Extrai dados dos itens encontrados
@@ -45,16 +45,19 @@ def pesquisa_amazon(busca):
                 produto = (titulo.replace(",", ""), preco, linkfull)
                 writer.writerow(produto)
                 pass
+            resultado = "concluido"
         except Exception as e:
             print(f"Ocorreu um erro ao registrar os itens da Amazon: {e}")
+            resultado = "erro"
         f.close()
         navegador.close()
+    return resultado
                     
 
 
 
 # Obtém lista de itens na página de resultados da Amazon
-def getItens(pagina, url):
+def getItens(pagina, url, busca):
     pagina.goto(url)
     # Desce até o final para carregar todos os itens
     pagina.evaluate("window.scrollTo(0, document.body.scrollHeight)")
@@ -62,7 +65,7 @@ def getItens(pagina, url):
 
     # Filtra itens válidos (exclui patrocinados e itens sem preço)
     itens = pagina.locator('div[role$="listitem"]').filter(has_not_text="rápido").filter(has_not_text="Patrocinado").filter(has_text="R$").all()
-    print(f'foram encontrados {len(itens)}')
+    print(f'foram encontrados {len(itens)} {busca} na Amazon...')
 
     return itens
 

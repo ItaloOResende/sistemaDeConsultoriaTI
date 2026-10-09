@@ -2,6 +2,8 @@
 import sys
 import csv
 import time
+from concurrent.futures import ThreadPoolExecutor
+
 import buscaAmazon
 import buscaKabbum
 import buscaTerabyte
@@ -69,36 +71,20 @@ placasMaeSoquetes = ["LGA 1151", "LGA 1200", "LGA 1700", "AM4", "AM5"]
 # Realiza busca em todas as lojas e organiza os resultados
 def pesquisa(busca):
     print(f"Pesquisando por: {busca}...")
-    # Busca na Amazon
-    try:
-        buscaAmazon.pesquisa_amazon(busca)
-    except Exception as e:
-        print(f"Erro Amazon: {e}")
-
-    # Busca na Kabum
-    try:
-        buscaKabbum.pesquisa_kabum(busca)
-    except Exception as e:
-        print(f"Erro Kabum: {e}")
-
-    # Busca na Terabyte
-    try:
-        buscaTerabyte.pesquisa_terabyte(busca)
-    except Exception as e:
-        print(f"Erro Terabyte: {e}")
-
-    # Busca na Pichau
-    try:
-        buscaPichau.pesquisa_pichau(busca)
-    except Exception as e:
-        print(f"Erro Pichau: {e}")
+    pool =  ThreadPoolExecutor(max_workers=4)
+    resultados = []
+    resultados.append(pool.submit(buscaAmazon.pesquisa_amazon, busca))
+    resultados.append(pool.submit(buscaKabbum.pesquisa_kabum, busca))
+    resultados.append(pool.submit(buscaTerabyte.pesquisa_terabyte, busca))
+    resultados.append(pool.submit(buscaPichau.pesquisa_pichau, busca))
+    pool.shutdown(wait=True)
 
     # Organiza os resultados em tabela ordenada por preço
     try:
         fazerTabela.prepara_tabela('csvs/preços.csv')
     except Exception as e:
         print(f"Erro ao gerar tabela: {e}")
-    time.sleep(10)
+    time.sleep(5)
 
 def pesquisar_ram(rsizes, rtypes):
     with open('csvs/preços.csv', 'w', newline='', encoding='utf-8') as f:
@@ -184,7 +170,7 @@ def pesquisar_intel_cpu(vendor, lines, generations, videoIntegrado=None):
             busca = f"processador {vendor} core {linha} {g} geracao"
             pesquisa(busca)
             try:
-                filtrarCpus.filtrar_intel_cpu('csvs/Produtos Ordenados.csv', linha, g, videoIntegrado)
+                filtrarCpus.filtrar_intel_cpu('csvs/Produtos Ordenados.csv', linha, g)
                 print(f"Filtragem de {busca} concluidas ")
             except Exception as e:
                 print(f"Ocorreu um erro ao filtrar os processadores: {e}")
@@ -199,13 +185,13 @@ def pesquisar_amd_cpu(lines=None, generations=None, vendor="amd"):
         lines = amdRyzenLines
     if generations is None:
         generations = amdRyzenGenerations
-
+    
     for linha in lines:
         for g in generations:
             if (linha, g) in amdRyzenIndisponiveis:
                 continue
             busca = f"processador {vendor} {linha} {g}"
-            # pesquisa(busca)
+            pesquisa(busca)
             try:
                 filtrarCpus.filtrar_amd_cpu('csvs/Produtos Ordenados.csv', linha, g)
                 print(f"Filtragem de {busca} concluidas ")
@@ -262,10 +248,16 @@ def pesquisar_gabinetes(tipos=None):
 
     if tipos is None:
         tipos = gabinetesTipos
-
+    pool = ThreadPoolExecutor(max_workers=3)
+    resultados = []
+    buscas = []
     for tipo in tipos:
-        busca = f"gabinete {tipo}"
-        #pesquisa(busca)
+        buscas.append(f"gabinete {tipo}")
+     
+    for busca in buscas:
+        resultados.append(pool.submit(pesquisa, busca))
+    pool.shutdown(wait=True)
+    for busca in buscas:
         try:
             filtrarGabinetes.filtrar_gabinetes('csvs/Produtos Ordenados.csv', tipo)
             print(f"Filtragem de {busca} concluidas ")
@@ -294,11 +286,12 @@ def pesquisar_placas_mae(soquetes=None):
 if __name__ == '__main__':
     # Limpa o CSV anterior antes de popular os novos
     ###################--FAVOR COMENTAR AS PESQUISAS QUE NAO DESEJA FAZER--#####################################################
+    start_time = time.perf_counter()
     # pesquisa_armazenamento(armazenamentoTypes, armVariant, armazenamentoSizes) #PESQUISA HDS E SSDS
     # pesquisar_ram(ramSizes, ramTypes) #PESQQQUISA MEMORIAS RAM DDR3 A 5
     # pesquisar_nvidia(gpuVendors[0], nvidiaSeries, nvidiaGenerations, nvidiaTiers) # PESQUISA PLACAS DE VIDEO NVIDIA DESDE A GTX1050 PRA CIMA
-    # pesquisar_intel_cpu(intelVendor, intelLines, intelGenerations) #PESQUISA PROCESSADORES INTEL CORE DA 10ª A 14ª GERAÇÃO
-    # pesquisar_amd_cpu(amdRyzenLines, amdRyzenGenerations, "amd","todos") #PESQUISA PROCESSADORES AMD RYZEN (1 BUSCA POR SKU)
+    #pesquisar_intel_cpu(intelVendor, intelLines, intelGenerations) #PESQUISA PROCESSADORES INTEL CORE DA 10ª A 14ª GERAÇÃO
+    # pesquisar_amd_cpu(amdRyzenLines, amdRyzenGenerations, "amd",) #PESQUISA PROCESSADORES AMD RYZEN (1 BUSCA POR SKU)
     # pesquisar_amd_cpu() #PESQUISA PROCESSADORES AMD RYZEN (1 BUSCA POR SKU)
     # pesquisar_intel_cpu(intelVendor, intelLines, intelGenerations, "todos") #PESQUISA  OS INTEL CORE COM E SEM VIDEO INTEGRADO
     # pesquisar_amd_gpu(gpuVendors[1],AMDSeries,radeon5HSeries)
@@ -310,3 +303,6 @@ if __name__ == '__main__':
     # pesquisar_placas_mae(placasMaeSoquetes) #PESQUISA PLACAS-MAE POR SOQUETE (LGA/AM)
     pesquisar_gabinetes(gabinetesTipos) #PESQUISA GABINETES (MINI/MID/FULL TOWER)
     # pesquisar_coolers() #PESQUISA COOLERS (AIR/WATER) SIMPLE/RGB/ARGB
+    end_time = time.perf_counter()
+    execution_time = end_time - start_time
+    print(f"Execution time: {execution_time:.6f} seconds")

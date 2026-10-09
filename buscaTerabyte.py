@@ -33,7 +33,7 @@ def pesquisa_terabyte(busca):
         print(f"Acessando a Terabyte...")
 
         try:
-            itens = getItens(pagina, url, 0)
+            itens = getItens(pagina, url, 0, busca)
             pass
         except Exception as e:
             print(f"Ocorreu um erro ao buscar os itens na Terabyte: {e}")
@@ -52,14 +52,16 @@ def pesquisa_terabyte(busca):
                 produto = (titulo, preco, linkfull)
                 writer.writerow(produto)
                 pass
+            resultado = "concluido"
         except Exception as e:
             print(f"Ocorreu um erro ao registrar os itens da Terabyte: {e}")
+            resultado = "erro"
 
         f.close()
         navegador.close()
 
 # Obtém itens da Terabyte com tentativas de recarga
-def getItens(pagina, url, tentativas):
+def getItens(pagina, url, tentativas, busca):
     tentativas += 1
     if tentativas == 5:
         return 0
@@ -67,11 +69,11 @@ def getItens(pagina, url, tentativas):
         pagina.goto(url)
         produtos = pagina.locator(".product-item__box").filter(has_text='R$').all()
         if len(produtos) > 0:
-            print(f"encontrados {len(produtos)} itens")
+            print(f"encontrados {len(produtos)} {busca} na Terabyte...")
             return produtos
         else:
-            print("tentando novamente")
-            return getItens(pagina, url, tentativas)
+            print(f"nenhum {busca} encontrado na Terabyte, tentando novamente...")
+            return getItens(pagina, url, tentativas, busca)
     
 
 if __name__ == '__main__':
