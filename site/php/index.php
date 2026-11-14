@@ -1,40 +1,10 @@
 <?php
 set_time_limit(300);
 
-$resultadosPorPeca = [];
-$totalSoma = 0.0;
-$erroTerminal = '';
+require __DIR__ . '/includes/config.php';
+require __DIR__ . '/includes/auth.php';
+require __DIR__ . '/includes/cotacao.php';
 
-function converterPrecoParaFloat($precoStr) {
-    $limpo = preg_replace('/[^\d,\.]/', '', $precoStr);
-
-    if (strpos($limpo, ',') !== false && strpos($limpo, '.') !== false) {
-        $limpo = str_replace('.', '', $limpo);
-        $limpo = str_replace(',', '.', $limpo);
-    } elseif (strpos($limpo, ',') !== false) {
-        $limpo = str_replace(',', '.', $limpo);
-    }
-
-    return floatval($limpo);
-}
-
-function identificarLoja($url) {
-    $urlLower = strtolower($url);
-    if (strpos($urlLower, 'kabum.com.br') !== false) {
-        return ['nome' => 'KaBuM!', 'tag_class' => 'loja-kabum', 'icone' => '🟧'];
-    } elseif (strpos($urlLower, 'amazon.com') !== false) {
-        return ['nome' => 'Amazon', 'tag_class' => 'loja-amazon', 'icone' => '📦'];
-    } elseif (strpos($urlLower, 'terabyteshop.com.br') !== false) {
-        return ['nome' => 'Terabyte', 'tag_class' => 'loja-terabyte', 'icone' => '⚡'];
-    } elseif (strpos($urlLower, 'pichau.com.br') !== false) {
-        return ['nome' => 'Pichau', 'tag_class' => 'loja-pichau', 'icone' => '🔴'];
-    }
-    return ['nome' => 'Loja Parceira', 'tag_class' => 'loja-padrao', 'icone' => '🛒'];
-}
-
-// ---------------------------------------------------------------------------
-// Configuração
-// ---------------------------------------------------------------------------
 // Os CSVs ficam em csvs/, na raiz do projeto (um nível acima de site/php).
 $raizProjeto = dirname(dirname(__DIR__));
 $csvsDir     = $raizProjeto . DIRECTORY_SEPARATOR . 'csvs' . DIRECTORY_SEPARATOR;
@@ -42,457 +12,47 @@ $csvsDir     = $raizProjeto . DIRECTORY_SEPARATOR . 'csvs' . DIRECTORY_SEPARATOR
 $perfilBusca = $_GET['perfil_busca'] ?? 'barato';
 $modoSetup   = ($_GET['montar_setup'] ?? '') === '1';
 
-// ---------------------------------------------------------------------------
-// Identidade e contatos do sistema
-// ---------------------------------------------------------------------------
-$nomeSistema   = 'TechCota';
-$sloganSistema = 'Consultoria & Cotação de Hardware';
-$siglaSistema  = 'TC';
-$anoAtual      = date('Y');
+$cotacao = calcularCotacao($_GET, $csvsDir, $modoSetup, $perfilBusca);
 
-$contatos = [
-    [
-        'nome'      => 'Ítalo Oliveira',
-        'linkedin'  => 'https://www.linkedin.com/in/italooresende/',
-        'instagram' => 'https://www.instagram.com/italoliveires/?hl=pt-br',
-        'whatsapp'  => '5531984534766',
-        'email'     => 'italoliveira5@gmail.com',
-    ],
-    [
-        'nome'      => 'Igor Quintino',
-        'linkedin'  => 'https://www.linkedin.com/in/quintino-igor/',
-        'instagram' => 'https://www.instagram.com/igorcquintino/?hl=pt-br',
-        'whatsapp'  => '5531989487756',
-        'email'     => 'igorcquintino@hotmail.com',
-    ],
-];
+$pecasParaCotar    = $cotacao['pecas'];
+$resultadosPorPeca = $cotacao['resultados'];
+$totalSoma         = $cotacao['total'];
+$pecasComFalta     = $cotacao['faltantes'];
+$ultimaAtualizacao = $cotacao['atualizacao'];
 
-$mensagemContato = 'Olá! Vim pelo site ' . $nomeSistema . ' e gostaria de falar sobre um orçamento.';
-$assuntoContato  = 'Contato pelo site ' . $nomeSistema;
+// Variáveis usadas pelo formulário (refletem os padrões do modo setup)
+$entrada      = $cotacao['entrada'];
+$cpuMarca     = $entrada['cpu_marca'];
+$cpuLinha     = $entrada['cpu_linha'];
+$cpuGen       = $entrada['cpu_gen'];
+$cpuVideo     = $entrada['cpu_video'];
+$ramTipo      = $entrada['ram_tipo'];
+$ramCap       = $entrada['ram_cap'];
+$ramDdr       = $entrada['ram_ddr'];
+$discoTipo    = $entrada['disco_tipo'];
+$discoCap     = $entrada['disco_cap'];
+$gpuMarca     = $entrada['gpu_marca'];
+$gpuSerie     = $entrada['gpu_serie'];
+$gpuModelo    = $entrada['gpu_modelo'];
+$fonteCap     = $entrada['fonte_cap'];
+$placaSoquete = $entrada['placa_soquete'];
+$gabineteTipo = $entrada['gabinete_tipo'];
+$coolerTipo   = $entrada['cooler_tipo'];
+$coolerEstilo = $entrada['cooler_estilo'];
 
-function urlLinkedin($valor) {
-    $valor = trim((string) $valor);
-    if ($valor === '') return '';
-    if (preg_match('~^https?://~i', $valor)) return $valor;
-    return 'https://www.linkedin.com/in/' . rawurlencode(trim($valor, '/'));
-}
+$ehAdmin       = ehAdmin();
+$temResultado  = $totalSoma > 0 && !empty($resultadosPorPeca);
+$podeFinalizar = $temResultado && $pecasComFalta === 0;
 
-function urlInstagram($valor) {
-    $valor = trim((string) $valor);
-    if ($valor === '') return '';
-    if (preg_match('~^https?://~i', $valor)) return $valor;
-    return 'https://www.instagram.com/' . rawurlencode(trim($valor, '/'));
-}
+// Preço mostrado ao cliente final x custo interno (admin)
+$totalCliente  = $modoSetup ? precoPcCliente($totalSoma) : precoPecaCliente($totalSoma);
+$valorServico  = $modoSetup ? (float) $configPrecos['montagem_pc'] : max(0, $totalCliente - $totalSoma);
+$freteCliente  = $modoSetup ? (float) $configPrecos['frete_pc'] : 0.0;
 
-function urlWhatsapp($valor, $mensagem) {
-    $numero = preg_replace('/\D/', '', (string) $valor);
-    if ($numero === '') return '';
-    return 'https://wa.me/' . $numero . '?text=' . rawurlencode($mensagem);
-}
-
-function urlEmail($email, $assunto, $corpo = '') {
-    $email = trim((string) $email);
-    if ($email === '') return '';
-    return 'https://mail.google.com/mail/?view=cm&fs=1'
-        . '&to=' . rawurlencode($email)
-        . '&su=' . rawurlencode($assunto)
-        . ($corpo !== '' ? '&body=' . rawurlencode($corpo) : '');
-}
-
-$iconesRedes = [
-    'linkedin' => '<svg viewBox="0 0 24 24" width="18" height="18" fill="currentColor" aria-hidden="true"><path d="M4.98 3.5a2.5 2.5 0 1 1-4.96 0 2.5 2.5 0 0 1 4.96 0ZM.5 8h4v16h-4V8Zm7.5 0h3.8v2.2h.05c.53-1 1.83-2.2 3.77-2.2 4.03 0 4.78 2.65 4.78 6.1V24h-4v-8.5c0-2.03-.04-4.64-2.83-4.64-2.83 0-3.27 2.2-3.27 4.5V24h-4V8Z"/></svg>',
-    'instagram' => '<svg viewBox="0 0 24 24" width="18" height="18" fill="none" stroke="currentColor" stroke-width="2" aria-hidden="true"><rect x="2.5" y="2.5" width="19" height="19" rx="5"/><circle cx="12" cy="12" r="4.2"/><circle cx="17.6" cy="6.4" r="1.2" fill="currentColor" stroke="none"/></svg>',
-    'whatsapp' => '<svg viewBox="0 0 24 24" width="18" height="18" fill="currentColor" aria-hidden="true"><path d="M12.04 2C6.6 2 2.2 6.4 2.2 11.84c0 1.74.46 3.44 1.32 4.94L2 22l5.34-1.4a9.8 9.8 0 0 0 4.7 1.2h.01c5.43 0 9.84-4.4 9.84-9.84C21.89 6.4 17.48 2 12.04 2Zm5.77 14.06c-.24.68-1.42 1.3-1.96 1.35-.54.06-1.05.08-1.81-.11-.45-.11-1.03-.33-1.77-.65-3.11-1.34-5.14-4.47-5.3-4.68-.15-.2-1.26-1.68-1.26-3.2 0-1.53.8-2.28 1.08-2.6.28-.31.61-.39.82-.39.2 0 .41 0 .59.01.19.01.44-.07.69.53.25.6.85 2.08.93 2.23.07.15.12.33.02.53-.1.2-.2.33-.4.51-.2.18-.42.4-.6.54-.2.2-.41.42-.18.82.23.4 1.02 1.68 2.18 2.72 1.5 1.33 2.76 1.74 3.16 1.94.4.2.63.17.86-.1.23-.28.99-1.16 1.25-1.56.26-.4.53-.33.89-.2.36.13 2.3 1.08 2.7 1.28.4.2.66.3.76.47.1.16.1.96-.14 1.64Z"/></svg>',
-    'email' => '<svg viewBox="0 0 24 24" width="18" height="18" fill="none" stroke="currentColor" stroke-width="2" aria-hidden="true"><rect x="2" y="4" width="20" height="16" rx="2"/><path d="m3 6 9 7 9-7"/></svg>',
-];
-
-// ---------------------------------------------------------------------------
-// Funções auxiliares
-// ---------------------------------------------------------------------------
-function chaveProduto($link, $titulo) {
-    // Amazon: /dp/ASIN (ignora parâmetros de rastreamento)
-    if (preg_match('~/dp/([A-Za-z0-9]{10})~', $link, $m)) {
-        return 'amazon:' . strtoupper($m[1]);
-    }
-    // Terabyte: /produto/ID
-    if (preg_match('~/produto/(\d+)~', $link, $m)) {
-        return 'terabyte:' . $m[1];
-    }
-    // KaBuM / Pichau: slug no fim da URL
-    $caminho = parse_url($link, PHP_URL_PATH) ?: '';
-    $slug = strtolower(trim(basename(rtrim($caminho, '/'))));
-    if ($slug !== '') return 'url:' . $slug;
-
-    return 'titulo:' . mb_strtolower(preg_replace('/\s+/', ' ', trim($titulo)));
-}
-
-/**
- * Lê um CSV de produtos aceitando:
- *   3 colunas -> Produto, Preço, Link
- *   4 colunas -> Produto, Soquete/Tamanho, Preço, Link
- * Detecta o preço e o link pela posição/conteúdo, sem depender da ordem fixa.
- */
-function lerProdutosDoCsv($arquivo) {
-    $itens = [];
-    $handle = @fopen($arquivo, 'r');
-    if ($handle === false) return $itens;
-
-    while (($linha = fgetcsv($handle, 0, ',')) !== false) {
-        if (!is_array($linha) || count($linha) < 2) continue;
-        if (strtolower(trim($linha[0] ?? '')) === 'produto') continue; // cabeçalho
-
-        $titulo = trim($linha[0]);
-        $link   = '';
-        $preco  = '';
-
-        foreach ($linha as $i => $celula) {
-            $celula = trim($celula);
-            if ($celula === '') continue;
-
-            if ($link === '' && preg_match('~^https?://~i', $celula)) {
-                $link = $celula;
-                continue;
-            }
-            // Preço = célula só com números/separadores (evita "LGA 1700" e "ATX")
-            if ($i > 0 && $preco === '' && preg_match('/^(?:R\$\s*)?[\d][\d.,]*$/', $celula)) {
-                $preco = $celula;
-            }
-        }
-
-        if ($titulo === '' || $link === '' || $preco === '') continue;
-
-        $valor = converterPrecoParaFloat($preco);
-        if ($valor <= 0) continue;
-
-        $itens[] = [
-            'titulo'     => $titulo,
-            'precoTexto' => 'R$ ' . number_format($valor, 2, ',', '.'),
-            'precoNum'   => $valor,
-            'link'       => $link,
-            'loja'       => identificarLoja($link),
-        ];
-    }
-
-    fclose($handle);
-    return $itens;
-}
-
-/** Expande padrões glob e devolve apenas arquivos existentes, sem repetição. */
-function arquivosExistentes(array $padroes) {
-    $arquivos = [];
-    foreach ($padroes as $padrao) {
-        foreach (glob($padrao) ?: [] as $arquivo) {
-            if (is_file($arquivo)) $arquivos[$arquivo] = true;
-        }
-    }
-    return array_keys($arquivos);
-}
-
-/**
- * Junta todos os arquivos, remove itens repetidos (mesmo link de produto)
- * e devolve a lista ordenada do mais barato para o mais caro.
- */
-function coletarProdutos(array $padroes) {
-    $unicos = [];
-
-    foreach (arquivosExistentes($padroes) as $arquivo) {
-        foreach (lerProdutosDoCsv($arquivo) as $item) {
-            $chave = chaveProduto($item['link'], $item['titulo']);
-            if (!isset($unicos[$chave]) || $item['precoNum'] < $unicos[$chave]['precoNum']) {
-                $unicos[$chave] = $item;
-            }
-        }
-    }
-
-    $lista = array_values($unicos);
-    usort($lista, fn($a, $b) => $a['precoNum'] <=> $b['precoNum']);
-    return $lista;
-}
-
-// ---------------------------------------------------------------------------
-// Entrada do formulário
-// ---------------------------------------------------------------------------
-$cpuMarca = strtolower(trim($_GET['cpu_marca'] ?? ''));
-$cpuLinha = strtolower(trim($_GET['cpu_linha'] ?? ''));
-$cpuGen   = trim($_GET['cpu_gen'] ?? '');
-$cpuVideo = $_GET['video_integrado'] ?? '';
-
-$ramTipo = strtolower(trim($_GET['ram_tipo'] ?? ''));
-$ramCap = strtolower(trim($_GET['ram_cap'] ?? ''));
-$ramDdr = strtolower(trim($_GET['ram_ddr'] ?? ''));
-
-$discoTipo = trim($_GET['disco_tipo'] ?? '');
-$discoCap  = strtolower(trim($_GET['disco_cap'] ?? ''));
-
-$gpuMarca  = strtolower(trim($_GET['gpu_marca'] ?? ''));
-$gpuSerie  = strtolower(trim($_GET['gpu_serie'] ?? ''));
-$gpuModelo = strtolower(trim($_GET['gpu_modelo'] ?? ''));
-
-$fonteCap     = strtolower(trim($_GET['fonte_cap'] ?? ''));
-$placaSoquete = trim($_GET['placa_soquete'] ?? '');
-$gabineteTipo = strtolower(trim($_GET['gabinete_tipo'] ?? ''));
-$coolerTipo   = strtolower(trim($_GET['cooler_tipo'] ?? ''));
-$coolerEstilo = strtolower(trim($_GET['cooler_estilo'] ?? ''));
-
-// ---------------------------------------------------------------------------
-// Valores padrão do "Montar Setup Completo"
-// ---------------------------------------------------------------------------
-if ($modoSetup) {
-    if ($cpuMarca === '') {
-        $cpuMarca = 'amd';
-        $cpuLinha = ($perfilBusca === 'desempenho') ? 'ryzen 7' : 'ryzen 5';
-        $cpuGen   = ($perfilBusca === 'desempenho') ? '7000' : '5000';
-    }
-    if ($ramCap === '' && $ramDdr === '') {
-        $ramCap = ($perfilBusca === 'desempenho') ? '32gb' : '16gb';
-        $ramDdr = ($perfilBusca === 'desempenho') ? 'ddr5' : 'ddr4';
-    }
-    if ($discoTipo === '' && $discoCap === '') {
-        $discoTipo = 'M.2 NVMe';
-        $discoCap  = ($perfilBusca === 'desempenho') ? '1tb' : '480gb';
-    }
-}
-
-// ---------------------------------------------------------------------------
-// Monta as peças: rótulo, termo exibido e padrões de arquivo CSV
-// ---------------------------------------------------------------------------
-$pecasParaCotar = [];
-
-// 1. Processador
-if ($cpuMarca !== '') {
-    $termoCpu = "processador {$cpuMarca}";
-    if ($cpuLinha !== '') $termoCpu .= " {$cpuLinha}";
-    if ($cpuGen !== '')   $termoCpu .= ($cpuMarca === 'intel') ? " {$cpuGen}ª geracao" : " serie {$cpuGen}";
-    if ($cpuVideo === 'sim' && $cpuMarca === 'amd') $termoCpu .= ' g';
-    elseif ($cpuVideo === 'nao' && $cpuMarca === 'intel') $termoCpu .= ' f';
-
-    $padroesCpu = [];
-    if ($cpuMarca === 'intel') {
-        $linhaArq = preg_replace('/[^i0-9]/', '', $cpuLinha);   // i5
-        $genArq   = preg_replace('/\D/', '', $cpuGen);          // 12
-        if ($linhaArq !== '') {
-            $padroesCpu[] = $csvsDir . "intel_{$linhaArq}_" . ($genArq !== '' ? $genArq : '*') . '.csv';
-        } else {
-            $padroesCpu[] = $csvsDir . 'intel_*.csv';
-        }
-    } else {
-        $linhaArq = preg_replace('/\D/', '', $cpuLinha);        // "ryzen 5" -> 5
-        $genArq   = preg_replace('/\D/', '', $cpuGen);          // 5000
-        if ($linhaArq !== '') {
-            $padroesCpu[] = $csvsDir . "amd_ryzen_{$linhaArq}_" . ($genArq !== '' ? $genArq : '*') . '.csv';
-        } else {
-            $padroesCpu[] = $csvsDir . 'amd_ryzen_*.csv';
-        }
-    }
-
-    $pecasParaCotar['cpu'] = ['rotulo' => 'Processador', 'termo' => $termoCpu, 'padroes' => $padroesCpu];
-}
-
-// 2. Memória RAM
-if ($ramTipo !== '' || $ramCap !== '' || $ramDdr !== '') {
-    $termoRam = 'memoria ram';
-    if ($ramTipo !== '') $termoRam .= " {$ramTipo}";
-    if ($ramCap !== '')  $termoRam .= " {$ramCap}";
-    if ($ramDdr !== '')  $termoRam .= " {$ramDdr}";
-
-    $padroesRam = [];
-    $avisoRam   = '';
-
-    if ($ramTipo === 'notebook') {
-        // A coleta automática atual não inclui SODIMM/notebook
-        $avisoRam = 'A coleta automática não inclui memórias de notebook (SODIMM). Escolha "Desktop" para buscar nos dados disponíveis.';
-        $padroesRam[] = $csvsDir . 'memoria_notebook_*.csv';
-    } elseif ($ramDdr !== '' && $ramCap !== '') {
-        $padroesRam[] = $csvsDir . "memoria_{$ramDdr}_{$ramCap}.csv";
-    } elseif ($ramDdr !== '') {
-        $padroesRam[] = $csvsDir . "memoria_{$ramDdr}_*.csv";
-    } elseif ($ramCap !== '') {
-        $padroesRam[] = $csvsDir . "memoria_ddr*_{$ramCap}.csv";
-    } else {
-        // Só o equipamento (Desktop): procura em todas as memórias desktop
-        $padroesRam[] = $csvsDir . 'memoria_*.csv';
-    }
-
-    $pecasParaCotar['ram'] = [
-        'rotulo'  => 'Memória RAM',
-        'termo'   => $termoRam,
-        'padroes' => $padroesRam,
-        'aviso'   => $avisoRam,
-    ];
-}
-
-// 3. Armazenamento
-if ($discoTipo !== '' || $discoCap !== '') {
-    $termoArmazenamento = $discoTipo !== '' ? $discoTipo : 'ssd m.2 nvme';
-    if ($discoCap !== '') $termoArmazenamento .= " {$discoCap}";
-
-    $mapaTipoDisco = [
-        'm.2 nvme'    => 'ssd_m.2 nvme',
-        'm.2 sata'    => 'ssd_m.2 sata',
-        'ssd sata'    => 'ssd_sata',
-        'hd pc'       => 'hdd_sata',
-        'hd notebook' => 'hdd_sata',
-    ];
-    // A interface usa 120/240/480; os arquivos gerados usam 128/256/512.
-    $mapaCapDisco = ['120gb' => '128gb', '240gb' => '256gb', '480gb' => '512gb'];
-
-    $tipoArq = $mapaTipoDisco[strtolower($discoTipo)] ?? '';
-    $capArq  = $mapaCapDisco[$discoCap] ?? $discoCap;
-
-    $padroesDisco = [];
-    if ($tipoArq !== '') {
-        $padroesDisco[] = $csvsDir . $tipoArq . '_' . ($capArq !== '' ? $capArq : '*') . '.csv';
-    } elseif ($capArq !== '') {
-        $padroesDisco[] = $csvsDir . "*_{$capArq}.csv";
-    }
-
-    $pecasParaCotar['armazenamento'] = ['rotulo' => 'Armazenamento', 'termo' => $termoArmazenamento, 'padroes' => $padroesDisco];
-}
-
-// 4. Placa de Vídeo
-if ($gpuMarca !== '') {
-    if ($gpuModelo !== '')     $termoGpu = $gpuModelo;
-    elseif ($gpuSerie !== '')  $termoGpu = $gpuSerie;
-    else                       $termoGpu = ($gpuMarca === 'nvidia') ? 'placa de video rtx' : 'placa de video radeon rx';
-
-    $padroesGpu = [];
-
-    if ($gpuModelo !== '') {
-        // "rtx 4060 ti 16gb" -> 4060
-        if (preg_match('/(\d{3,4})/', $gpuModelo, $m)) {
-            $padroesGpu[] = $csvsDir . "nvidia_*_{$m[1]}.csv";
-            $padroesGpu[] = $csvsDir . "amd_rx_*_{$m[1]}.csv";
-        }
-    } elseif ($gpuSerie !== '') {
-        if (str_starts_with($gpuSerie, 'rx')) {
-            if (preg_match('/(\d+)/', $gpuSerie, $m)) {
-                $numeros = $m[1];
-                // "6000" -> amd_rx_6???  |  "500" -> amd_rx_5??
-                $padroesGpu[] = $csvsDir . 'amd_rx_' . $numeros[0] . str_repeat('?', strlen($numeros) - 1) . '.csv';
-            }
-        } else {
-            if (preg_match('/(\d+)/', $gpuSerie, $m)) {
-                // "40" -> nvidia_*_40??  (4060, 4070...)
-                $padroesGpu[] = $csvsDir . 'nvidia_*_' . $m[1] . str_repeat('?', 4 - strlen($m[1])) . '.csv';
-            } else {
-                $padroesGpu[] = $csvsDir . 'nvidia_gtx_????.csv';
-            }
-        }
-    } else {
-        $padroesGpu[] = $csvsDir . (($gpuMarca === 'nvidia') ? 'nvidia_*.csv' : 'amd_rx_*.csv');
-    }
-
-    $pecasParaCotar['gpu'] = ['rotulo' => 'Placa de Vídeo', 'termo' => $termoGpu, 'padroes' => $padroesGpu];
-}
-
-// 5. Fontes, placas-mãe, gabinetes e coolers
-
-// Fonte de alimentação
-$capacidadeFontePadrao = ($perfilBusca === 'desempenho' || $gpuMarca !== '') ? '650w' : '500w';
-if ($fonteCap !== '') {
-    $capacidadeFonte = ($fonteCap === 'todos') ? '' : $fonteCap;
-} elseif ($modoSetup) {
-    $capacidadeFonte = $capacidadeFontePadrao;
-} else {
-    $capacidadeFonte = null;
-}
-if ($capacidadeFonte !== null) {
-    $pecasParaCotar['fonte'] = [
-        'rotulo'  => 'Fonte de Alimentação',
-        'termo'   => $capacidadeFonte !== '' ? "fonte {$capacidadeFonte} 80 plus" : 'fonte 80 plus',
-        'padroes' => [$csvsDir . ($capacidadeFonte !== '' ? "fonte_{$capacidadeFonte}.csv" : 'fonte_*.csv')],
-    ];
-}
-
-// Placa-mãe
-$soquetePlaca = '';
-if ($placaSoquete !== '') {
-    $soquetePlaca = ($placaSoquete === 'todos') ? '' : $placaSoquete;
-} elseif ($modoSetup) {
-    // Soquete coerente com a CPU escolhida
-    if ($cpuMarca === 'intel') {
-        $gen = (int) preg_replace('/\D/', '', $cpuGen);
-        if ($gen === 0 || $gen >= 12)  $soquetePlaca = 'LGA 1700';
-        elseif ($gen >= 10)            $soquetePlaca = 'LGA 1200';
-        else                           $soquetePlaca = 'LGA 1151';
-    } elseif ($cpuMarca === 'amd') {
-        $gen = (int) preg_replace('/\D/', '', $cpuGen);
-        $soquetePlaca = ($gen >= 7000) ? 'AM5' : 'AM4';
-    }
-}
-if ($placaSoquete !== '' || $modoSetup) {
-    $pecasParaCotar['placa_mae'] = [
-        'rotulo'  => 'Placa-Mãe',
-        'termo'   => $soquetePlaca !== '' ? 'placa mae ' . strtolower($soquetePlaca) : 'placa mae',
-        'padroes' => [$csvsDir . ($soquetePlaca !== ''
-            ? 'placa_mae_' . strtolower(str_replace(' ', '_', $soquetePlaca)) . '.csv'
-            : 'placa_mae_*.csv')],
-    ];
-}
-
-// Gabinete
-if ($gabineteTipo !== '' || $modoSetup) {
-    $tipoGabinete = ($gabineteTipo === '' || $gabineteTipo === 'todos') ? '' : $gabineteTipo;
-    $pecasParaCotar['gabinete'] = [
-        'rotulo'  => 'Gabinete',
-        'termo'   => $tipoGabinete !== ''
-            ? 'gabinete ' . str_replace('_', ' ', $tipoGabinete)
-            : 'gabinete gamer com fans',
-        'padroes' => [$csvsDir . ($tipoGabinete !== '' ? "gabinete_{$tipoGabinete}.csv" : 'gabinete_*.csv')],
-    ];
-}
-
-// Cooler (air/water + estilo)
-if ($coolerTipo !== '' || $coolerEstilo !== '') {
-    $tipoCooler   = ($coolerTipo === 'todos') ? '' : $coolerTipo;
-    $estiloCooler = ($coolerEstilo === 'todos') ? '' : $coolerEstilo;
-
-    $termoCooler = $tipoCooler !== '' ? "{$tipoCooler} cooler" : 'cooler';
-    if ($estiloCooler !== '') $termoCooler .= " {$estiloCooler}";
-
-    $padroesCooler = [$csvsDir . ($tipoCooler !== '' ? $tipoCooler : '*') . '_cooler_' . ($estiloCooler !== '' ? $estiloCooler : '*') . '.csv'];
-
-    $pecasParaCotar['cooler'] = [
-        'rotulo'  => 'Cooler',
-        'termo'   => $termoCooler,
-        'padroes' => $padroesCooler,
-    ];
-}
-
-// ---------------------------------------------------------------------------
-// Coleta as ofertas e escolhe a mais barata de cada peça
-// ---------------------------------------------------------------------------
-$resultadosPorPeca = [];
-$totalSoma         = 0.0;
-$pecasComFalta     = 0;
-$ultimaAtualizacao = 0;
-
-foreach (glob($csvsDir . '*.csv') ?: [] as $arquivoCsv) {
-    $ultimaAtualizacao = max($ultimaAtualizacao, (int) @filemtime($arquivoCsv));
-}
-
-foreach ($pecasParaCotar as $chave => $dados) {
-    $itens        = coletarProdutos($dados['padroes']);
-    $melhor       = $itens[0] ?? null;
-    $alternativas = array_slice($itens, 1, 3);
-
-    if ($melhor !== null) {
-        $totalSoma += $melhor['precoNum'];
-    } else {
-        $pecasComFalta++;
-    }
-
-    $resultadosPorPeca[$chave] = [
-        'rotulo'       => $dados['rotulo'],
-        'termo'        => $dados['termo'],
-        'padroes'      => $dados['padroes'],
-        'arquivos'     => array_map('basename', arquivosExistentes($dados['padroes'])),
-        'aviso'        => $dados['aviso'] ?? '',
-        'total'        => count($itens),
-        'melhor'       => $melhor,
-        'alternativas' => $alternativas,
-    ];
-}
+// Mantém todos os filtros atuais ao ir para o checkout
+$queryCheckout = $_GET;
+$queryCheckout['montar_setup'] = $modoSetup ? '1' : '0';
+$linkCheckout = 'checkout.php?' . http_build_query($queryCheckout);
 
 $erroTerminal = '';
 ?>
@@ -509,17 +69,7 @@ $erroTerminal = '';
 <body>
 
 <!-- MENU FIXO -->
-<header class="topbar">
-    <div class="topbar-inner">
-        <a class="brand" href="index.php" aria-label="<?= htmlspecialchars($nomeSistema) ?> — página inicial">
-            <span class="brand-logo"><?= htmlspecialchars($siglaSistema) ?></span>
-            <span class="brand-text">
-                <span class="brand-name"><?= htmlspecialchars($nomeSistema) ?></span>
-                <span class="brand-tag"><?= htmlspecialchars($sloganSistema) ?></span>
-            </span>
-        </a>
-    </div>
-</header>
+<?php require __DIR__ . '/includes/topbar.php'; ?>
 
 <div class="dashboard-container">
     
@@ -733,24 +283,81 @@ $erroTerminal = '';
         <?php endif; ?>
 
         <?php if ($totalSoma > 0): ?>
-            <div class="summary-banner">
-                <div>
-                    <div class="summary-title">
-                        <?= $modoSetup ? 'Orçamento Estimado (somando as peças encontradas)' : (count($resultadosPorPeca) > 1 ? 'Total das Peças Selecionadas' : 'Oferta Mais Barata Encontrada') ?>
-                    </div>
-                    <div class="summary-subtitle">
-                        <?= $pecasComFalta > 0
-                            ? "Soma parcial: {$pecasComFalta} peça(s) sem oferta nos dados coletados."
-                            : 'Soma do menor preço encontrado para cada componente.' ?>
-                        <?php if ($ultimaAtualizacao > 0): ?>
-                            · Dados de <?= date('d/m/Y H:i', $ultimaAtualizacao) ?>
-                        <?php endif; ?>
-                    </div>
+            <div class="summary-banner <?= $ehAdmin ? 'summary-admin' : 'summary-cliente' ?>">
+                <div class="summary-texto">
+                    <?php if ($ehAdmin): ?>
+                        <div class="summary-title">Visão administrativa — custo das peças</div>
+                        <div class="summary-subtitle">
+                            <?= $pecasComFalta > 0
+                                ? "Soma parcial: {$pecasComFalta} peça(s) sem oferta nos dados coletados."
+                                : 'Soma do menor preço encontrado para cada componente.' ?>
+                            <?php if ($ultimaAtualizacao > 0): ?>
+                                · Dados de <?= date('d/m/Y H:i', $ultimaAtualizacao) ?>
+                            <?php endif; ?>
+                        </div>
+                        <div class="summary-cliente">
+                            Preço para o cliente: <strong><?= formatarPreco($totalCliente) ?></strong>
+                            (<?= $modoSetup ? 'PC completo montado' : 'peças avulsas' ?>)
+                        </div>
+                    <?php elseif ($modoSetup): ?>
+                        <div class="summary-title">Seu PC completo montado</div>
+                        <div class="summary-subtitle">Recebemos as peças, montamos, testamos, embalamos e enviamos até você.</div>
+                        <div class="resumo-linhas">
+                            <div class="resumo-linha"><span>Peças</span><span><?= formatarPreco($totalSoma) ?></span></div>
+                            <div class="resumo-linha"><span>Montagem, testes e embalagem</span><span><?= formatarPreco($valorServico) ?></span></div>
+                            <div class="resumo-linha">
+                                <span>Frete</span>
+                                <span><?= $freteCliente > 0 ? formatarPreco($freteCliente) : 'A combinar' ?></span>
+                            </div>
+                            <?php if ($pecasComFalta > 0): ?>
+                                <div class="resumo-aviso">⚠ <?= $pecasComFalta ?> componente(s) sem oferta nos dados atuais. Fale com a gente para ajustar a configuração.</div>
+                            <?php endif; ?>
+                        </div>
+                    <?php else: ?>
+                        <div class="summary-title">
+                            <?= count($resultadosPorPeca) > 1 ? 'Total das peças selecionadas' : 'Oferta mais barata encontrada' ?>
+                        </div>
+                        <div class="summary-subtitle">
+                            Valor final para compra das peças avulsas.
+                            <?php if ($pecasComFalta > 0): ?>
+                                · <?= $pecasComFalta ?> peça(s) sem oferta.
+                            <?php endif; ?>
+                            <?php if ($ultimaAtualizacao > 0): ?>
+                                · Dados de <?= date('d/m/Y H:i', $ultimaAtualizacao) ?>
+                            <?php endif; ?>
+                        </div>
+                    <?php endif; ?>
                 </div>
                 <div class="summary-price">
-                    R$ <?= number_format($totalSoma, 2, ',', '.') ?>
+                    <span class="summary-price-label"><?= $ehAdmin ? 'Custo' : 'Total' ?></span>
+                    <?= formatarPreco($ehAdmin ? $totalSoma : $totalCliente) ?>
                 </div>
             </div>
+
+            <?php if ($temResultado): ?>
+                <div class="checkout-bar">
+                    <div class="checkout-info">
+                        <strong><?= $modoSetup ? 'PC completo montado' : 'Peças selecionadas' ?></strong>
+                        <span>
+                            <?= $modoSetup
+                                ? 'As peças chegam até nós, montamos, testamos, embalamos e enviamos para o endereço informado.'
+                                : 'Compra das peças avulsas selecionadas.' ?>
+                        </span>
+                        <?php if ($ehAdmin): ?>
+                            <span class="checkout-nota">Visão admin: o cliente veria <?= formatarPreco($totalCliente) ?>.</span>
+                        <?php endif; ?>
+                    </div>
+                    <?php if ($podeFinalizar): ?>
+                        <a class="btn-primario btn-comprar" href="<?= e($linkCheckout) ?>">
+                            <?= $modoSetup ? 'Solicitar montagem' : 'Comprar peças' ?>
+                        </a>
+                    <?php else: ?>
+                        <span class="checkout-nota checkout-nota-alerta">
+                            Ajuste os componentes sem oferta para finalizar.
+                        </span>
+                    <?php endif; ?>
+                </div>
+            <?php endif; ?>
         <?php endif; ?>
 
         <?php if (!empty($resultadosPorPeca)): ?>
@@ -758,46 +365,59 @@ $erroTerminal = '';
                 <div class="categoria-bloco">
                     <div class="categoria-label">
                         <?= htmlspecialchars($dados['rotulo']) ?> — Termo: "<?= htmlspecialchars($dados['termo']) ?>"
-                        <?php if ($dados['total'] > 0): ?>
+                        <?php if ($ehAdmin && $dados['total'] > 0): ?>
                             · <?= $dados['total'] ?> oferta(s) encontrada(s)
                         <?php endif; ?>
                     </div>
 
-                    <?php if ($dados['melhor'] !== null): $item = $dados['melhor']; ?>
-                        <a href="<?= htmlspecialchars($item['link']) ?>" target="_blank" rel="noopener" class="product-card destaque-menor">
-                            <div class="product-info">
-                                <div class="product-title"><?= htmlspecialchars($item['titulo']) ?></div>
-                                <div class="product-price"><?= htmlspecialchars($item['precoTexto']) ?></div>
-                            </div>
-                            <div class="loja-badge <?= $item['loja']['tag_class'] ?>">
-                                <span><?= $item['loja']['icone'] ?></span>
-                                <span><?= $item['loja']['nome'] ?></span>
-                            </div>
-                        </a>
+                    <?php if ($ehAdmin): ?>
+                        <?php if ($dados['melhor'] !== null): $item = $dados['melhor']; ?>
+                            <a href="<?= htmlspecialchars($item['link']) ?>" target="_blank" rel="noopener" class="product-card destaque-menor">
+                                <div class="product-info">
+                                    <div class="product-title"><?= htmlspecialchars($item['titulo']) ?></div>
+                                    <div class="product-price"><?= htmlspecialchars($item['precoTexto']) ?></div>
+                                </div>
+                                <div class="loja-badge <?= $item['loja']['tag_class'] ?>">
+                                    <span><?= $item['loja']['icone'] ?></span>
+                                    <span><?= $item['loja']['nome'] ?></span>
+                                </div>
+                            </a>
 
-                        <?php if (!empty($dados['alternativas'])): ?>
-                            <details class="alternativas">
-                                <summary>Ver outras <?= count($dados['alternativas']) ?> ofertas mais baratas</summary>
-                                <?php foreach ($dados['alternativas'] as $alt): ?>
-                                    <a class="alternativa" href="<?= htmlspecialchars($alt['link']) ?>" target="_blank" rel="noopener">
-                                        <span class="alt-titulo"><?= htmlspecialchars($alt['titulo']) ?></span>
-                                        <span class="alt-preco"><?= htmlspecialchars($alt['precoTexto']) ?></span>
-                                        <span class="loja-badge <?= $alt['loja']['tag_class'] ?>"><?= $alt['loja']['icone'] ?> <?= $alt['loja']['nome'] ?></span>
-                                    </a>
-                                <?php endforeach; ?>
-                            </details>
+                            <?php if (!empty($dados['alternativas'])): ?>
+                                <details class="alternativas">
+                                    <summary>Ver outras <?= count($dados['alternativas']) ?> ofertas mais baratas</summary>
+                                    <?php foreach ($dados['alternativas'] as $alt): ?>
+                                        <a class="alternativa" href="<?= htmlspecialchars($alt['link']) ?>" target="_blank" rel="noopener">
+                                            <span class="alt-titulo"><?= htmlspecialchars($alt['titulo']) ?></span>
+                                            <span class="alt-preco"><?= htmlspecialchars($alt['precoTexto']) ?></span>
+                                            <span class="loja-badge <?= $alt['loja']['tag_class'] ?>"><?= $alt['loja']['icone'] ?> <?= $alt['loja']['nome'] ?></span>
+                                        </a>
+                                    <?php endforeach; ?>
+                                </details>
+                            <?php endif; ?>
+                        <?php else: ?>
+                            <div class="sem-oferta">
+                                Nenhuma oferta encontrada para <b><?= htmlspecialchars($dados['rotulo']) ?></b> nos dados coletados.
+                                <?php if (!empty($dados['aviso'])): ?>
+                                    <div class="dica"><?= htmlspecialchars($dados['aviso']) ?></div>
+                                <?php elseif (empty($dados['arquivos'])): ?>
+                                    <div class="dica">Arquivo esperado: <code><?= htmlspecialchars(implode(' | ', array_map('basename', $dados['padroes']))) ?></code></div>
+                                <?php else: ?>
+                                    <div class="dica">Os arquivos existem, mas estão vazios: <code><?= htmlspecialchars(implode(', ', $dados['arquivos'])) ?></code></div>
+                                <?php endif; ?>
+                            </div>
                         <?php endif; ?>
                     <?php else: ?>
-                        <div class="sem-oferta">
-                            Nenhuma oferta encontrada para <b><?= htmlspecialchars($dados['rotulo']) ?></b> nos dados coletados.
-                            <?php if (!empty($dados['aviso'])): ?>
-                                <div class="dica"><?= htmlspecialchars($dados['aviso']) ?></div>
-                            <?php elseif (empty($dados['arquivos'])): ?>
-                                <div class="dica">Arquivo esperado: <code><?= htmlspecialchars(implode(' | ', array_map('basename', $dados['padroes']))) ?></code></div>
-                            <?php else: ?>
-                                <div class="dica">Os arquivos existem, mas estão vazios: <code><?= htmlspecialchars(implode(', ', $dados['arquivos'])) ?></code></div>
-                            <?php endif; ?>
-                        </div>
+                        <?php if ($dados['melhor'] !== null): ?>
+                            <div class="cliente-peca">
+                                <span class="cliente-peca-check">✓</span>
+                                <span><?= htmlspecialchars($dados['rotulo']) ?> selecionado para o seu setup.</span>
+                            </div>
+                        <?php else: ?>
+                            <div class="sem-oferta">
+                                Este componente está indisponível na configuração escolhida. Fale com a gente pelo WhatsApp para ajustarmos.
+                            </div>
+                        <?php endif; ?>
                     <?php endif; ?>
                 </div>
             <?php endforeach; ?>
@@ -813,48 +433,7 @@ $erroTerminal = '';
 </div>
 
 <!-- RODAPÉ -->
-<footer class="site-footer" id="contato">
-    <div class="footer-inner">
-        <div class="footer-col footer-brand">
-            <a class="brand" href="index.php" aria-label="<?= htmlspecialchars($nomeSistema) ?> — página inicial">
-                <span class="brand-logo"><?= htmlspecialchars($siglaSistema) ?></span>
-                <span class="brand-name"><?= htmlspecialchars($nomeSistema) ?></span>
-            </a>
-            <p>Comparador de preços de hardware: encontre a peça mais barata nas principais lojas e monte seu setup com economia.</p>
-        </div>
-
-        <?php foreach ($contatos as $pessoa): ?>
-            <div class="footer-col">
-                <h4><?= htmlspecialchars($pessoa['nome']) ?></h4>
-                <div class="social-links">
-                    <?php
-                    $linksPessoa = [
-                        'linkedin'  => ['rotulo' => 'LinkedIn',  'url' => urlLinkedin($pessoa['linkedin'])],
-                        'instagram' => ['rotulo' => 'Instagram', 'url' => urlInstagram($pessoa['instagram'])],
-                        'whatsapp'  => ['rotulo' => 'WhatsApp',  'url' => urlWhatsapp($pessoa['whatsapp'], $mensagemContato)],
-                        'email'     => ['rotulo' => 'E-mail',    'url' => urlEmail($pessoa['email'], $assuntoContato, $mensagemContato)],
-                    ];
-                    ?>
-                    <?php foreach ($linksPessoa as $tipo => $link): ?>
-                        <?php if ($link['url'] !== ''): ?>
-                            <a class="social-link social-<?= $tipo ?>"
-                               href="<?= htmlspecialchars($link['url']) ?>"
-                               target="_blank" rel="noopener"
-                               title="<?= htmlspecialchars($link['rotulo']) ?> de <?= htmlspecialchars($pessoa['nome']) ?>">
-                                <?= $iconesRedes[$tipo] ?>
-                                <span><?= htmlspecialchars($link['rotulo']) ?></span>
-                            </a>
-                        <?php endif; ?>
-                    <?php endforeach; ?>
-                </div>
-            </div>
-        <?php endforeach; ?>
-    </div>
-
-    <div class="footer-bottom">
-        &copy; <?= $anoAtual ?> <strong><?= htmlspecialchars($nomeSistema) ?></strong> — Consultoria &amp; Cotação de Hardware. Todos os direitos reservados.
-    </div>
-</footer>
+<?php require __DIR__ . '/includes/footer.php'; ?>
 
 <script>
 // Dados para CPU
