@@ -32,201 +32,405 @@ function identificarLoja($url) {
     return ['nome' => 'Loja Parceira', 'tag_class' => 'loja-padrao', 'icone' => '🛒'];
 }
 
-$perfilBusca = $_GET['perfil_busca'] ?? 'barato';
-$modoSetup = isset($_GET['montar_setup']) && $_GET['montar_setup'] === '1';
+// ---------------------------------------------------------------------------
+// Configuração
+// ---------------------------------------------------------------------------
+// Os CSVs ficam em csvs/, na raiz do projeto (um nível acima de site/php).
+$raizProjeto = dirname(dirname(__DIR__));
+$csvsDir     = $raizProjeto . DIRECTORY_SEPARATOR . 'csvs' . DIRECTORY_SEPARATOR;
 
-// 1. Processador
-$termoCpu = '';
-$cpuMarca = $_GET['cpu_marca'] ?? '';
-$cpuLinha = $_GET['cpu_linha'] ?? '';
-$cpuGen   = $_GET['cpu_gen'] ?? '';
+$perfilBusca = $_GET['perfil_busca'] ?? 'barato';
+$modoSetup   = ($_GET['montar_setup'] ?? '') === '1';
+
+// ---------------------------------------------------------------------------
+// Funções auxiliares
+// ---------------------------------------------------------------------------
+function chaveProduto($link, $titulo) {
+    // Amazon: /dp/ASIN (ignora parâmetros de rastreamento)
+    if (preg_match('~/dp/([A-Za-z0-9]{10})~', $link, $m)) {
+        return 'amazon:' . strtoupper($m[1]);
+    }
+    // Terabyte: /produto/ID
+    if (preg_match('~/produto/(\d+)~', $link, $m)) {
+        return 'terabyte:' . $m[1];
+    }
+    // KaBuM / Pichau: slug no fim da URL
+    $caminho = parse_url($link, PHP_URL_PATH) ?: '';
+    $slug = strtolower(trim(basename(rtrim($caminho, '/'))));
+    if ($slug !== '') return 'url:' . $slug;
+
+    return 'titulo:' . mb_strtolower(preg_replace('/\s+/', ' ', trim($titulo)));
+}
+
+/**
+ * Lê um CSV de produtos aceitando:
+ *   3 colunas -> Produto, Preço, Link
+ *   4 colunas -> Produto, Soquete/Tamanho, Preço, Link
+ * Detecta o preço e o link pela posição/conteúdo, sem depender da ordem fixa.
+ */
+function lerProdutosDoCsv($arquivo) {
+    $itens = [];
+    $handle = @fopen($arquivo, 'r');
+    if ($handle === false) return $itens;
+
+    while (($linha = fgetcsv($handle, 0, ',')) !== false) {
+        if (!is_array($linha) || count($linha) < 2) continue;
+        if (strtolower(trim($linha[0] ?? '')) === 'produto') continue; // cabeçalho
+
+        $titulo = trim($linha[0]);
+        $link   = '';
+        $preco  = '';
+
+        foreach ($linha as $i => $celula) {
+            $celula = trim($celula);
+            if ($celula === '') continue;
+
+            if ($link === '' && preg_match('~^https?://~i', $celula)) {
+                $link = $celula;
+                continue;
+            }
+            // Preço = célula só com números/separadores (evita "LGA 1700" e "ATX")
+            if ($i > 0 && $preco === '' && preg_match('/^(?:R\$\s*)?[\d][\d.,]*$/', $celula)) {
+                $preco = $celula;
+            }
+        }
+
+        if ($titulo === '' || $link === '' || $preco === '') continue;
+
+        $valor = converterPrecoParaFloat($preco);
+        if ($valor <= 0) continue;
+
+        $itens[] = [
+            'titulo'     => $titulo,
+            'precoTexto' => 'R$ ' . number_format($valor, 2, ',', '.'),
+            'precoNum'   => $valor,
+            'link'       => $link,
+            'loja'       => identificarLoja($link),
+        ];
+    }
+
+    fclose($handle);
+    return $itens;
+}
+
+/** Expande padrões glob e devolve apenas arquivos existentes, sem repetição. */
+function arquivosExistentes(array $padroes) {
+    $arquivos = [];
+    foreach ($padroes as $padrao) {
+        foreach (glob($padrao) ?: [] as $arquivo) {
+            if (is_file($arquivo)) $arquivos[$arquivo] = true;
+        }
+    }
+    return array_keys($arquivos);
+}
+
+/**
+ * Junta todos os arquivos, remove itens repetidos (mesmo link de produto)
+ * e devolve a lista ordenada do mais barato para o mais caro.
+ */
+function coletarProdutos(array $padroes) {
+    $unicos = [];
+
+    foreach (arquivosExistentes($padroes) as $arquivo) {
+        foreach (lerProdutosDoCsv($arquivo) as $item) {
+            $chave = chaveProduto($item['link'], $item['titulo']);
+            if (!isset($unicos[$chave]) || $item['precoNum'] < $unicos[$chave]['precoNum']) {
+                $unicos[$chave] = $item;
+            }
+        }
+    }
+
+    $lista = array_values($unicos);
+    usort($lista, fn($a, $b) => $a['precoNum'] <=> $b['precoNum']);
+    return $lista;
+}
+
+// ---------------------------------------------------------------------------
+// Entrada do formulário
+// ---------------------------------------------------------------------------
+$cpuMarca = strtolower(trim($_GET['cpu_marca'] ?? ''));
+$cpuLinha = strtolower(trim($_GET['cpu_linha'] ?? ''));
+$cpuGen   = trim($_GET['cpu_gen'] ?? '');
 $cpuVideo = $_GET['video_integrado'] ?? '';
 
-if (!empty($cpuMarca)) {
-    $termoCpu = "processador " . $cpuMarca;
-    if (!empty($cpuLinha)) $termoCpu .= " " . $cpuLinha;
-    if (!empty($cpuGen)) {
-        $termoCpu .= " " . $cpuGen;
-    } elseif ($perfilBusca === 'desempenho') {
-        $termoCpu .= ($cpuMarca === 'intel') ? ' 14ª geracao' : ' 7000';
+$ramTipo = strtolower(trim($_GET['ram_tipo'] ?? ''));
+$ramCap = strtolower(trim($_GET['ram_cap'] ?? ''));
+$ramDdr = strtolower(trim($_GET['ram_ddr'] ?? ''));
+
+$discoTipo = trim($_GET['disco_tipo'] ?? '');
+$discoCap  = strtolower(trim($_GET['disco_cap'] ?? ''));
+
+$gpuMarca  = strtolower(trim($_GET['gpu_marca'] ?? ''));
+$gpuSerie  = strtolower(trim($_GET['gpu_serie'] ?? ''));
+$gpuModelo = strtolower(trim($_GET['gpu_modelo'] ?? ''));
+
+$fonteCap     = strtolower(trim($_GET['fonte_cap'] ?? ''));
+$placaSoquete = trim($_GET['placa_soquete'] ?? '');
+$gabineteTipo = strtolower(trim($_GET['gabinete_tipo'] ?? ''));
+$coolerTipo   = strtolower(trim($_GET['cooler_tipo'] ?? ''));
+$coolerEstilo = strtolower(trim($_GET['cooler_estilo'] ?? ''));
+
+// ---------------------------------------------------------------------------
+// Valores padrão do "Montar Setup Completo"
+// ---------------------------------------------------------------------------
+if ($modoSetup) {
+    if ($cpuMarca === '') {
+        $cpuMarca = 'amd';
+        $cpuLinha = ($perfilBusca === 'desempenho') ? 'ryzen 7' : 'ryzen 5';
+        $cpuGen   = ($perfilBusca === 'desempenho') ? '7000' : '5000';
+    }
+    if ($ramCap === '' && $ramDdr === '') {
+        $ramCap = ($perfilBusca === 'desempenho') ? '32gb' : '16gb';
+        $ramDdr = ($perfilBusca === 'desempenho') ? 'ddr5' : 'ddr4';
+    }
+    if ($discoTipo === '' && $discoCap === '') {
+        $discoTipo = 'M.2 NVMe';
+        $discoCap  = ($perfilBusca === 'desempenho') ? '1tb' : '480gb';
+    }
+}
+
+// ---------------------------------------------------------------------------
+// Monta as peças: rótulo, termo exibido e padrões de arquivo CSV
+// ---------------------------------------------------------------------------
+$pecasParaCotar = [];
+
+// 1. Processador
+if ($cpuMarca !== '') {
+    $termoCpu = "processador {$cpuMarca}";
+    if ($cpuLinha !== '') $termoCpu .= " {$cpuLinha}";
+    if ($cpuGen !== '')   $termoCpu .= ($cpuMarca === 'intel') ? " {$cpuGen}ª geracao" : " serie {$cpuGen}";
+    if ($cpuVideo === 'sim' && $cpuMarca === 'amd') $termoCpu .= ' g';
+    elseif ($cpuVideo === 'nao' && $cpuMarca === 'intel') $termoCpu .= ' f';
+
+    $padroesCpu = [];
+    if ($cpuMarca === 'intel') {
+        $linhaArq = preg_replace('/[^i0-9]/', '', $cpuLinha);   // i5
+        $genArq   = preg_replace('/\D/', '', $cpuGen);          // 12
+        if ($linhaArq !== '') {
+            $padroesCpu[] = $csvsDir . "intel_{$linhaArq}_" . ($genArq !== '' ? $genArq : '*') . '.csv';
+        } else {
+            $padroesCpu[] = $csvsDir . 'intel_*.csv';
+        }
+    } else {
+        $linhaArq = preg_replace('/\D/', '', $cpuLinha);        // "ryzen 5" -> 5
+        $genArq   = preg_replace('/\D/', '', $cpuGen);          // 5000
+        if ($linhaArq !== '') {
+            $padroesCpu[] = $csvsDir . "amd_ryzen_{$linhaArq}_" . ($genArq !== '' ? $genArq : '*') . '.csv';
+        } else {
+            $padroesCpu[] = $csvsDir . 'amd_ryzen_*.csv';
+        }
     }
 
-    if ($cpuVideo === 'sim') {
-        if ($cpuMarca === 'amd') {
-            $termoCpu .= " g";
-        }
-    } elseif ($cpuVideo === 'nao') {
-        if ($cpuMarca === 'intel') {
-            $termoCpu .= " f";
-        }
-    }
+    $pecasParaCotar['cpu'] = ['rotulo' => 'Processador', 'termo' => $termoCpu, 'padroes' => $padroesCpu];
 }
 
 // 2. Memória RAM
-$termoRam = '';
-$ramCap = $_GET['ram_cap'] ?? '';
-$ramDdr = $_GET['ram_ddr'] ?? '';
+if ($ramTipo !== '' || $ramCap !== '' || $ramDdr !== '') {
+    $termoRam = 'memoria ram';
+    if ($ramTipo !== '') $termoRam .= " {$ramTipo}";
+    if ($ramCap !== '')  $termoRam .= " {$ramCap}";
+    if ($ramDdr !== '')  $termoRam .= " {$ramDdr}";
 
-if (!empty($ramCap) || !empty($ramDdr)) {
-    $termoRam = "memoria ram";
-    if (!empty($ramCap)) $termoRam .= " " . $ramCap;
-    if (!empty($ramDdr)) {
-        $termoRam .= " " . $ramDdr;
-    } elseif ($perfilBusca === 'desempenho') {
-        $termoRam .= " ddr5";
-    } elseif ($perfilBusca === 'barato') {
-        $termoRam .= " ddr4";
+    $padroesRam = [];
+    $avisoRam   = '';
+
+    if ($ramTipo === 'notebook') {
+        // A coleta automática atual não inclui SODIMM/notebook
+        $avisoRam = 'A coleta automática não inclui memórias de notebook (SODIMM). Escolha "Desktop" para buscar nos dados disponíveis.';
+        $padroesRam[] = $csvsDir . 'memoria_notebook_*.csv';
+    } elseif ($ramDdr !== '' && $ramCap !== '') {
+        $padroesRam[] = $csvsDir . "memoria_{$ramDdr}_{$ramCap}.csv";
+    } elseif ($ramDdr !== '') {
+        $padroesRam[] = $csvsDir . "memoria_{$ramDdr}_*.csv";
+    } elseif ($ramCap !== '') {
+        $padroesRam[] = $csvsDir . "memoria_ddr*_{$ramCap}.csv";
+    } else {
+        // Só o equipamento (Desktop): procura em todas as memórias desktop
+        $padroesRam[] = $csvsDir . 'memoria_*.csv';
     }
+
+    $pecasParaCotar['ram'] = [
+        'rotulo'  => 'Memória RAM',
+        'termo'   => $termoRam,
+        'padroes' => $padroesRam,
+        'aviso'   => $avisoRam,
+    ];
 }
 
 // 3. Armazenamento
-$termoArmazenamento = '';
-$discoTipo = $_GET['disco_tipo'] ?? '';
-$discoCap  = $_GET['disco_cap'] ?? '';
+if ($discoTipo !== '' || $discoCap !== '') {
+    $termoArmazenamento = $discoTipo !== '' ? $discoTipo : 'ssd m.2 nvme';
+    if ($discoCap !== '') $termoArmazenamento .= " {$discoCap}";
 
-if (!empty($discoTipo) || !empty($discoCap)) {
-    $termoArmazenamento = $discoTipo ?: 'ssd nvme';
-    if (!empty($discoCap)) $termoArmazenamento .= " " . $discoCap;
+    $mapaTipoDisco = [
+        'm.2 nvme'    => 'ssd_m.2 nvme',
+        'm.2 sata'    => 'ssd_m.2 sata',
+        'ssd sata'    => 'ssd_sata',
+        'hd pc'       => 'hdd_sata',
+        'hd notebook' => 'hdd_sata',
+    ];
+    // A interface usa 120/240/480; os arquivos gerados usam 128/256/512.
+    $mapaCapDisco = ['120gb' => '128gb', '240gb' => '256gb', '480gb' => '512gb'];
+
+    $tipoArq = $mapaTipoDisco[strtolower($discoTipo)] ?? '';
+    $capArq  = $mapaCapDisco[$discoCap] ?? $discoCap;
+
+    $padroesDisco = [];
+    if ($tipoArq !== '') {
+        $padroesDisco[] = $csvsDir . $tipoArq . '_' . ($capArq !== '' ? $capArq : '*') . '.csv';
+    } elseif ($capArq !== '') {
+        $padroesDisco[] = $csvsDir . "*_{$capArq}.csv";
+    }
+
+    $pecasParaCotar['armazenamento'] = ['rotulo' => 'Armazenamento', 'termo' => $termoArmazenamento, 'padroes' => $padroesDisco];
 }
 
 // 4. Placa de Vídeo
-$termoGpu = '';
-$gpuMarca  = $_GET['gpu_marca'] ?? '';
-$gpuSerie  = $_GET['gpu_serie'] ?? '';
-$gpuModelo = $_GET['gpu_modelo'] ?? '';
+if ($gpuMarca !== '') {
+    if ($gpuModelo !== '')     $termoGpu = $gpuModelo;
+    elseif ($gpuSerie !== '')  $termoGpu = $gpuSerie;
+    else                       $termoGpu = ($gpuMarca === 'nvidia') ? 'placa de video rtx' : 'placa de video radeon rx';
 
-if (!empty($gpuMarca)) {
-    if (!empty($gpuModelo)) {
-        $termoGpu = $gpuModelo;
-    } elseif (!empty($gpuSerie)) {
-        $termoGpu = $gpuSerie;
-    } else {
-        $termoGpu = ($gpuMarca === 'nvidia') ? 'placa de video rtx' : 'placa de video radeon rx';
-    }
-}
+    $padroesGpu = [];
 
-// 5. Montagem do array de cotação
-$pecasParaCotar = [];
-
-if (!empty($termoCpu)) $pecasParaCotar['cpu'] = ['rotulo' => 'Processador', 'termo' => $termoCpu];
-if (!empty($termoRam)) $pecasParaCotar['ram'] = ['rotulo' => 'Memória RAM', 'termo' => $termoRam];
-if (!empty($termoArmazenamento)) $pecasParaCotar['armazenamento'] = ['rotulo' => 'Armazenamento', 'termo' => $termoArmazenamento];
-if (!empty($termoGpu)) $pecasParaCotar['gpu'] = ['rotulo' => 'Placa de Vídeo', 'termo' => $termoGpu];
-
-if ($modoSetup) {
-    if (!isset($pecasParaCotar['cpu'])) {
-        $pecasParaCotar['cpu'] = [
-            'rotulo' => 'Processador',
-            'termo'  => ($perfilBusca === 'desempenho') ? 'processador ryzen 7 7700' : 'processador ryzen 5 5600gt'
-        ];
-    }
-    if (!isset($pecasParaCotar['placa_mae'])) {
-        $isIntel = (isset($pecasParaCotar['cpu']) && strpos(strtolower($pecasParaCotar['cpu']['termo']), 'intel') !== false);
-        $termoPlaca = $isIntel ? 'placa mae lga 1700' : (($perfilBusca === 'desempenho') ? 'placa mae b650 am5' : 'placa mae b550 am4');
-        $pecasParaCotar['placa_mae'] = ['rotulo' => 'Placa-Mãe', 'termo' => $termoPlaca];
-    }
-    if (!isset($pecasParaCotar['ram'])) {
-        $pecasParaCotar['ram'] = [
-            'rotulo' => 'Memória RAM',
-            'termo'  => ($perfilBusca === 'desempenho') ? 'memoria ram 32gb ddr5' : 'memoria ram 16gb ddr4'
-        ];
-    }
-    if (!isset($pecasParaCotar['armazenamento'])) {
-        $pecasParaCotar['armazenamento'] = [
-            'rotulo' => 'Armazenamento',
-            'termo'  => ($perfilBusca === 'desempenho') ? 'ssd nvme 1tb' : 'ssd nvme 500gb'
-        ];
-    }
-    if (!isset($pecasParaCotar['fonte'])) {
-        $pecasParaCotar['fonte'] = [
-            'rotulo' => 'Fonte de Alimentação',
-            'termo'  => ($perfilBusca === 'desempenho' || isset($pecasParaCotar['gpu'])) ? 'fonte 650w 80 plus' : 'fonte 500w 80 plus'
-        ];
-    }
-    if (!isset($pecasParaCotar['gabinete'])) {
-        $pecasParaCotar['gabinete'] = [
-            'rotulo' => 'Gabinete',
-            'termo'  => 'gabinete gamer com fans'
-        ];
-    }
-}
-
-// 6. Leitura direta das tabelas CSV
-if (!empty($pecasParaCotar)) {
-    $raiz_projeto = dirname(dirname(__DIR__));
-    $pasta_csvs   = $raiz_projeto . DIRECTORY_SEPARATOR . 'csvs' . DIRECTORY_SEPARATOR;
-
-    foreach ($pecasParaCotar as $chave => $dados) {
-        $termo  = $dados['termo'];
-        $rotulo = $dados['rotulo'];
-        $arquivosParaLer = [];
-
-        if ($chave === 'ram') {
-            $capacidade = strtolower($_GET['ram_cap'] ?? '8gb');
-            $geracao    = strtolower($_GET['ram_ddr'] ?? '');
-
-            if (!empty($geracao)) {
-                $arquivosParaLer[] = $pasta_csvs . "memoria_{$geracao}_{$capacidade}.csv";
+    if ($gpuModelo !== '') {
+        // "rtx 4060 ti 16gb" -> 4060
+        if (preg_match('/(\d{3,4})/', $gpuModelo, $m)) {
+            $padroesGpu[] = $csvsDir . "nvidia_*_{$m[1]}.csv";
+            $padroesGpu[] = $csvsDir . "amd_rx_*_{$m[1]}.csv";
+        }
+    } elseif ($gpuSerie !== '') {
+        if (str_starts_with($gpuSerie, 'rx')) {
+            if (preg_match('/(\d+)/', $gpuSerie, $m)) {
+                $numeros = $m[1];
+                // "6000" -> amd_rx_6???  |  "500" -> amd_rx_5??
+                $padroesGpu[] = $csvsDir . 'amd_rx_' . $numeros[0] . str_repeat('?', strlen($numeros) - 1) . '.csv';
+            }
+        } else {
+            if (preg_match('/(\d+)/', $gpuSerie, $m)) {
+                // "40" -> nvidia_*_40??  (4060, 4070...)
+                $padroesGpu[] = $csvsDir . 'nvidia_*_' . $m[1] . str_repeat('?', 4 - strlen($m[1])) . '.csv';
             } else {
-                $arquivosParaLer = glob($pasta_csvs . "memoria_ddr*_{$capacidade}.csv") ?: [];
-            }
-        } else {
-            $arquivosParaLer = [
-                $raiz_projeto . DIRECTORY_SEPARATOR . 'Produtos Ordenados.csv',
-                $raiz_projeto . DIRECTORY_SEPARATOR . 'preços.csv'
-            ];
-        }
-
-        $itensDestaPeca = [];
-
-        foreach ($arquivosParaLer as $csv_file) {
-            if (file_exists($csv_file) && filesize($csv_file) > 0) {
-                if (($handle = fopen($csv_file, "r")) !== FALSE) {
-                    while (($data = fgetcsv($handle, 1000, ",")) !== FALSE) {
-                        if (count($data) >= 3) {
-                            $link       = trim($data[2]);
-                            $precoTexto = trim($data[1]);
-                            $precoNum   = converterPrecoParaFloat($precoTexto);
-                            $titulo     = mb_convert_encoding(trim($data[0]), 'UTF-8', 'UTF-8');
-
-                            if ($precoNum > 0 && !empty($link)) {
-                                $itensDestaPeca[] = [
-                                    'titulo'     => $titulo,
-                                    'precoTexto' => (strpos($precoTexto, 'R$') === false ? 'R$ ' : '') . $precoTexto,
-                                    'precoNum'   => $precoNum,
-                                    'link'       => $link,
-                                    'loja'       => identificarLoja($link)
-                                ];
-                            }
-                        }
-                    }
-                    fclose($handle);
-                }
+                $padroesGpu[] = $csvsDir . 'nvidia_gtx_????.csv';
             }
         }
+    } else {
+        $padroesGpu[] = $csvsDir . (($gpuMarca === 'nvidia') ? 'nvidia_*.csv' : 'amd_rx_*.csv');
+    }
 
-        if (!empty($itensDestaPeca)) {
-            usort($itensDestaPeca, function ($a, $b) use ($perfilBusca) {
-                return ($perfilBusca === 'desempenho') ? ($b['precoNum'] <=> $a['precoNum']) : ($a['precoNum'] <=> $b['precoNum']);
-            });
+    $pecasParaCotar['gpu'] = ['rotulo' => 'Placa de Vídeo', 'termo' => $termoGpu, 'padroes' => $padroesGpu];
+}
 
-            $melhorOpcao = $itensDestaPeca[0];
-            $totalSoma += $melhorOpcao['precoNum'];
+// 5. Fontes, placas-mãe, gabinetes e coolers
 
-            $resultadosPorPeca[$chave] = [
-                'rotulo' => $rotulo,
-                'termo'  => $termo,
-                'item'   => $melhorOpcao
-            ];
-        } else {
-            $resultadosPorPeca[$chave] = [
-                'rotulo' => $rotulo,
-                'termo'  => $termo,
-                'item'   => null
-            ];
-        }
+// Fonte de alimentação
+$capacidadeFontePadrao = ($perfilBusca === 'desempenho' || $gpuMarca !== '') ? '650w' : '500w';
+if ($fonteCap !== '') {
+    $capacidadeFonte = ($fonteCap === 'todos') ? '' : $fonteCap;
+} elseif ($modoSetup) {
+    $capacidadeFonte = $capacidadeFontePadrao;
+} else {
+    $capacidadeFonte = null;
+}
+if ($capacidadeFonte !== null) {
+    $pecasParaCotar['fonte'] = [
+        'rotulo'  => 'Fonte de Alimentação',
+        'termo'   => $capacidadeFonte !== '' ? "fonte {$capacidadeFonte} 80 plus" : 'fonte 80 plus',
+        'padroes' => [$csvsDir . ($capacidadeFonte !== '' ? "fonte_{$capacidadeFonte}.csv" : 'fonte_*.csv')],
+    ];
+}
+
+// Placa-mãe
+$soquetePlaca = '';
+if ($placaSoquete !== '') {
+    $soquetePlaca = ($placaSoquete === 'todos') ? '' : $placaSoquete;
+} elseif ($modoSetup) {
+    // Soquete coerente com a CPU escolhida
+    if ($cpuMarca === 'intel') {
+        $gen = (int) preg_replace('/\D/', '', $cpuGen);
+        if ($gen === 0 || $gen >= 12)  $soquetePlaca = 'LGA 1700';
+        elseif ($gen >= 10)            $soquetePlaca = 'LGA 1200';
+        else                           $soquetePlaca = 'LGA 1151';
+    } elseif ($cpuMarca === 'amd') {
+        $gen = (int) preg_replace('/\D/', '', $cpuGen);
+        $soquetePlaca = ($gen >= 7000) ? 'AM5' : 'AM4';
     }
 }
+if ($placaSoquete !== '' || $modoSetup) {
+    $pecasParaCotar['placa_mae'] = [
+        'rotulo'  => 'Placa-Mãe',
+        'termo'   => $soquetePlaca !== '' ? 'placa mae ' . strtolower($soquetePlaca) : 'placa mae',
+        'padroes' => [$csvsDir . ($soquetePlaca !== ''
+            ? 'placa_mae_' . strtolower(str_replace(' ', '_', $soquetePlaca)) . '.csv'
+            : 'placa_mae_*.csv')],
+    ];
+}
+
+// Gabinete
+if ($gabineteTipo !== '' || $modoSetup) {
+    $tipoGabinete = ($gabineteTipo === '' || $gabineteTipo === 'todos') ? '' : $gabineteTipo;
+    $pecasParaCotar['gabinete'] = [
+        'rotulo'  => 'Gabinete',
+        'termo'   => $tipoGabinete !== ''
+            ? 'gabinete ' . str_replace('_', ' ', $tipoGabinete)
+            : 'gabinete gamer com fans',
+        'padroes' => [$csvsDir . ($tipoGabinete !== '' ? "gabinete_{$tipoGabinete}.csv" : 'gabinete_*.csv')],
+    ];
+}
+
+// Cooler (air/water + estilo)
+if ($coolerTipo !== '' || $coolerEstilo !== '') {
+    $tipoCooler   = ($coolerTipo === 'todos') ? '' : $coolerTipo;
+    $estiloCooler = ($coolerEstilo === 'todos') ? '' : $coolerEstilo;
+
+    $termoCooler = $tipoCooler !== '' ? "{$tipoCooler} cooler" : 'cooler';
+    if ($estiloCooler !== '') $termoCooler .= " {$estiloCooler}";
+
+    $padroesCooler = [$csvsDir . ($tipoCooler !== '' ? $tipoCooler : '*') . '_cooler_' . ($estiloCooler !== '' ? $estiloCooler : '*') . '.csv'];
+
+    $pecasParaCotar['cooler'] = [
+        'rotulo'  => 'Cooler',
+        'termo'   => $termoCooler,
+        'padroes' => $padroesCooler,
+    ];
+}
+
+// ---------------------------------------------------------------------------
+// Coleta as ofertas e escolhe a mais barata de cada peça
+// ---------------------------------------------------------------------------
+$resultadosPorPeca = [];
+$totalSoma         = 0.0;
+$pecasComFalta     = 0;
+$ultimaAtualizacao = 0;
+
+foreach (glob($csvsDir . '*.csv') ?: [] as $arquivoCsv) {
+    $ultimaAtualizacao = max($ultimaAtualizacao, (int) @filemtime($arquivoCsv));
+}
+
+foreach ($pecasParaCotar as $chave => $dados) {
+    $itens        = coletarProdutos($dados['padroes']);
+    $melhor       = $itens[0] ?? null;
+    $alternativas = array_slice($itens, 1, 3);
+
+    if ($melhor !== null) {
+        $totalSoma += $melhor['precoNum'];
+    } else {
+        $pecasComFalta++;
+    }
+
+    $resultadosPorPeca[$chave] = [
+        'rotulo'       => $dados['rotulo'],
+        'termo'        => $dados['termo'],
+        'padroes'      => $dados['padroes'],
+        'arquivos'     => array_map('basename', arquivosExistentes($dados['padroes'])),
+        'aviso'        => $dados['aviso'] ?? '',
+        'total'        => count($itens),
+        'melhor'       => $melhor,
+        'alternativas' => $alternativas,
+    ];
+}
+
+$erroTerminal = '';
 ?>
 <!DOCTYPE html>
 <html lang="pt-BR">
@@ -308,6 +512,7 @@ if (!empty($pecasParaCotar)) {
 
                         <select name="ram_cap" id="ram_cap" class="seletor-peca">
                             <option value="">Capacidade (Ignorar)</option>
+                            <option value="2gb" <?= (($ramCap ?? '') == '2gb') ? 'selected' : '' ?>>2GB</option>
                             <option value="4gb" <?= (($ramCap ?? '') == '4gb') ? 'selected' : '' ?>>4GB</option>
                             <option value="8gb" <?= (($ramCap ?? '') == '8gb') ? 'selected' : '' ?>>8GB</option>
                             <option value="16gb" <?= (($ramCap ?? '') == '16gb') ? 'selected' : '' ?>>16GB</option>
@@ -340,7 +545,7 @@ if (!empty($pecasParaCotar)) {
                             <option value="hd notebook" <?= ($discoTipo == 'hd notebook') ? 'selected' : '' ?>>HD notebook</option>
                         </select>
                         <select name="disco_cap" id="disco_cap" class="seletor-peca">
-                            <option value="">Capacidade (Selecionar)</option>
+                            <option value="">Capacidade (Ignorar)</option>
                             <option value="120gb" <?= ($discoCap == '120gb') ? 'selected' : '' ?>>120GB</option>
                             <option value="240gb" <?= ($discoCap == '240gb') ? 'selected' : '' ?>>240GB / 256GB</option>
                             <option value="480gb" <?= ($discoCap == '480gb') ? 'selected' : '' ?>>480GB / 512GB</option>
@@ -372,6 +577,63 @@ if (!empty($pecasParaCotar)) {
                     </div>
                 </div>
 
+                <!-- 5. Outros Componentes -->
+                <div class="accordion-item">
+                    <button type="button" class="accordion-btn" onclick="toggleAccordion(this)">
+                        <span>🔧 Outros Componentes</span>
+                        <span class="seta">▼</span>
+                    </button>
+                    <div class="accordion-content">
+                        <select name="fonte_cap" id="fonte_cap" class="seletor-peca">
+                            <option value="">Fonte (Ignorar)</option>
+                            <option value="todos" <?= ($fonteCap == 'todos') ? 'selected' : '' ?>>Qualquer capacidade (mais barata)</option>
+                            <option value="400w" <?= ($fonteCap == '400w') ? 'selected' : '' ?>>400W</option>
+                            <option value="500w" <?= ($fonteCap == '500w') ? 'selected' : '' ?>>500W</option>
+                            <option value="550w" <?= ($fonteCap == '550w') ? 'selected' : '' ?>>550W</option>
+                            <option value="600w" <?= ($fonteCap == '600w') ? 'selected' : '' ?>>600W</option>
+                            <option value="650w" <?= ($fonteCap == '650w') ? 'selected' : '' ?>>650W</option>
+                            <option value="700w" <?= ($fonteCap == '700w') ? 'selected' : '' ?>>700W</option>
+                            <option value="750w" <?= ($fonteCap == '750w') ? 'selected' : '' ?>>750W</option>
+                            <option value="800w" <?= ($fonteCap == '800w') ? 'selected' : '' ?>>800W</option>
+                            <option value="850w" <?= ($fonteCap == '850w') ? 'selected' : '' ?>>850W</option>
+                            <option value="1000w" <?= ($fonteCap == '1000w') ? 'selected' : '' ?>>1000W</option>
+                        </select>
+
+                        <select name="placa_soquete" id="placa_soquete" class="seletor-peca">
+                            <option value="">Placa-Mãe (Ignorar)</option>
+                            <option value="todos" <?= ($placaSoquete == 'todos') ? 'selected' : '' ?>>Qualquer soquete (mais barata)</option>
+                            <option value="AM4" <?= (strcasecmp($placaSoquete, 'AM4') === 0) ? 'selected' : '' ?>>AM4</option>
+                            <option value="AM5" <?= (strcasecmp($placaSoquete, 'AM5') === 0) ? 'selected' : '' ?>>AM5</option>
+                            <option value="LGA 1151" <?= (strcasecmp($placaSoquete, 'LGA 1151') === 0) ? 'selected' : '' ?>>LGA 1151</option>
+                            <option value="LGA 1200" <?= (strcasecmp($placaSoquete, 'LGA 1200') === 0) ? 'selected' : '' ?>>LGA 1200</option>
+                            <option value="LGA 1700" <?= (strcasecmp($placaSoquete, 'LGA 1700') === 0) ? 'selected' : '' ?>>LGA 1700</option>
+                        </select>
+
+                        <select name="gabinete_tipo" id="gabinete_tipo" class="seletor-peca">
+                            <option value="">Gabinete (Ignorar)</option>
+                            <option value="todos" <?= ($gabineteTipo == 'todos') ? 'selected' : '' ?>>Qualquer tamanho (mais barato)</option>
+                            <option value="mini_tower" <?= ($gabineteTipo == 'mini_tower') ? 'selected' : '' ?>>Mini Tower</option>
+                            <option value="mid_tower" <?= ($gabineteTipo == 'mid_tower') ? 'selected' : '' ?>>Mid Tower</option>
+                            <option value="full_tower" <?= ($gabineteTipo == 'full_tower') ? 'selected' : '' ?>>Full Tower</option>
+                        </select>
+
+                        <select name="cooler_tipo" id="cooler_tipo" class="seletor-peca">
+                            <option value="">Cooler (Ignorar)</option>
+                            <option value="todos" <?= ($coolerTipo == 'todos') ? 'selected' : '' ?>>Qualquer tipo (mais barato)</option>
+                            <option value="air" <?= ($coolerTipo == 'air') ? 'selected' : '' ?>>Air Cooler (a ar)</option>
+                            <option value="water" <?= ($coolerTipo == 'water') ? 'selected' : '' ?>>Water Cooler (líquido)</option>
+                        </select>
+
+                        <select name="cooler_estilo" id="cooler_estilo" class="seletor-peca">
+                            <option value="">Estilo do Cooler (Ignorar)</option>
+                            <option value="todos" <?= ($coolerEstilo == 'todos') ? 'selected' : '' ?>>Qualquer estilo</option>
+                            <option value="simples" <?= ($coolerEstilo == 'simples') ? 'selected' : '' ?>>Simples (sem LED)</option>
+                            <option value="rgb" <?= ($coolerEstilo == 'rgb') ? 'selected' : '' ?>>RGB</option>
+                            <option value="argb" <?= ($coolerEstilo == 'argb') ? 'selected' : '' ?>>ARGB</option>
+                        </select>
+                    </div>
+                </div>
+
             </div>
 
             <label class="checkbox-container">
@@ -394,10 +656,15 @@ if (!empty($pecasParaCotar)) {
             <div class="summary-banner">
                 <div>
                     <div class="summary-title">
-                        <?= $modoSetup ? 'Orçamento Estimado da Máquina Completa' : (count($resultadosPorPeca) > 1 ? 'Valor Total das Peças Selecionadas' : 'Melhor Oferta Encontrada') ?>
+                        <?= $modoSetup ? 'Orçamento Estimado (somando as peças encontradas)' : (count($resultadosPorPeca) > 1 ? 'Total das Peças Selecionadas' : 'Oferta Mais Barata Encontrada') ?>
                     </div>
                     <div class="summary-subtitle">
-                        Soma automática com o melhor valor unitário de cada componente.
+                        <?= $pecasComFalta > 0
+                            ? "Soma parcial: {$pecasComFalta} peça(s) sem oferta nos dados coletados."
+                            : 'Soma do menor preço encontrado para cada componente.' ?>
+                        <?php if ($ultimaAtualizacao > 0): ?>
+                            · Dados de <?= date('d/m/Y H:i', $ultimaAtualizacao) ?>
+                        <?php endif; ?>
                     </div>
                 </div>
                 <div class="summary-price">
@@ -408,15 +675,16 @@ if (!empty($pecasParaCotar)) {
 
         <?php if (!empty($resultadosPorPeca)): ?>
             <?php foreach ($resultadosPorPeca as $chave => $dados): ?>
-                <?php if (!empty($dados['item'])): 
-                    $item = $dados['item'];
-                ?>
-                    <div class="categoria-bloco">
-                        <div class="categoria-label">
-                            <?= htmlspecialchars($dados['rotulo']) ?> — Termo: "<?= htmlspecialchars($dados['termo']) ?>"
-                        </div>
-                        
-                        <a href="<?= htmlspecialchars($item['link']) ?>" target="_blank" class="product-card">
+                <div class="categoria-bloco">
+                    <div class="categoria-label">
+                        <?= htmlspecialchars($dados['rotulo']) ?> — Termo: "<?= htmlspecialchars($dados['termo']) ?>"
+                        <?php if ($dados['total'] > 0): ?>
+                            · <?= $dados['total'] ?> oferta(s) encontrada(s)
+                        <?php endif; ?>
+                    </div>
+
+                    <?php if ($dados['melhor'] !== null): $item = $dados['melhor']; ?>
+                        <a href="<?= htmlspecialchars($item['link']) ?>" target="_blank" rel="noopener" class="product-card destaque-menor">
                             <div class="product-info">
                                 <div class="product-title"><?= htmlspecialchars($item['titulo']) ?></div>
                                 <div class="product-price"><?= htmlspecialchars($item['precoTexto']) ?></div>
@@ -426,12 +694,32 @@ if (!empty($pecasParaCotar)) {
                                 <span><?= $item['loja']['nome'] ?></span>
                             </div>
                         </a>
-                    </div>
-                <?php else: ?>
-                    <div class="categoria-bloco" style="color:var(--text-muted);">
-                        Nenhum produto válido encontrado para <b><?= htmlspecialchars($dados['rotulo']) ?></b>.
-                    </div>
-                <?php endif; ?>
+
+                        <?php if (!empty($dados['alternativas'])): ?>
+                            <details class="alternativas">
+                                <summary>Ver outras <?= count($dados['alternativas']) ?> ofertas mais baratas</summary>
+                                <?php foreach ($dados['alternativas'] as $alt): ?>
+                                    <a class="alternativa" href="<?= htmlspecialchars($alt['link']) ?>" target="_blank" rel="noopener">
+                                        <span class="alt-titulo"><?= htmlspecialchars($alt['titulo']) ?></span>
+                                        <span class="alt-preco"><?= htmlspecialchars($alt['precoTexto']) ?></span>
+                                        <span class="loja-badge <?= $alt['loja']['tag_class'] ?>"><?= $alt['loja']['icone'] ?> <?= $alt['loja']['nome'] ?></span>
+                                    </a>
+                                <?php endforeach; ?>
+                            </details>
+                        <?php endif; ?>
+                    <?php else: ?>
+                        <div class="sem-oferta">
+                            Nenhuma oferta encontrada para <b><?= htmlspecialchars($dados['rotulo']) ?></b> nos dados coletados.
+                            <?php if (!empty($dados['aviso'])): ?>
+                                <div class="dica"><?= htmlspecialchars($dados['aviso']) ?></div>
+                            <?php elseif (empty($dados['arquivos'])): ?>
+                                <div class="dica">Arquivo esperado: <code><?= htmlspecialchars(implode(' | ', array_map('basename', $dados['padroes']))) ?></code></div>
+                            <?php else: ?>
+                                <div class="dica">Os arquivos existem, mas estão vazios: <code><?= htmlspecialchars(implode(', ', $dados['arquivos'])) ?></code></div>
+                            <?php endif; ?>
+                        </div>
+                    <?php endif; ?>
+                </div>
             <?php endforeach; ?>
         <?php else: ?>
             <div class="empty-placeholder">
@@ -455,6 +743,10 @@ const dadosCpu = {
             { val: "i9", label: "Core i9" }
         ],
         geracoes: [
+            { val: "6ª", label: "6ª Geração" },
+            { val: "7ª", label: "7ª Geração" },
+            { val: "8ª", label: "8ª Geração" },
+            { val: "9ª", label: "9ª Geração" },
             { val: "10ª", label: "10ª Geração" },
             { val: "11ª", label: "11ª Geração" },
             { val: "12ª", label: "12ª Geração" },
@@ -474,7 +766,8 @@ const dadosCpu = {
             { val: "4000", label: "Série 4000" },
             { val: "5000", label: "Série 5000" },
             { val: "7000", label: "Série 7000" },
-            { val: "8000", label: "Série 8000" }
+            { val: "8000", label: "Série 8000" },
+            { val: "9000", label: "Série 9000" }
         ]
     }
 };
@@ -491,14 +784,20 @@ const dadosGpu = {
         ],
         modelos: {
             gtx: [
+                { val: "gtx 1050", label: "GTX 1050 2GB/4GB" },
+                { val: "gtx 1060", label: "GTX 1060 3GB/6GB" },
+                { val: "gtx 1070", label: "GTX 1070 8GB" },
                 { val: "gtx 1650", label: "GTX 1650 4GB" },
                 { val: "gtx 1660", label: "GTX 1660 6GB" },
                 { val: "gtx 1660 super", label: "GTX 1660 Super 6GB" },
                 { val: "gtx 1660 ti", label: "GTX 1660 Ti 6GB" }
             ],
             "rtx 20": [
+                { val: "rtx 2050", label: "RTX 2050 4GB" },
                 { val: "rtx 2060", label: "RTX 2060 6GB/12GB" },
-                { val: "rtx 2060 super", label: "RTX 2060 Super 8GB" }
+                { val: "rtx 2060 super", label: "RTX 2060 Super 8GB" },
+                { val: "rtx 2070", label: "RTX 2070 8GB" },
+                { val: "rtx 2080", label: "RTX 2080 8GB" }
             ],
             "rtx 30": [
                 { val: "rtx 3050", label: "RTX 3050 6GB/8GB" },
@@ -510,6 +809,7 @@ const dadosGpu = {
                 { val: "rtx 3090", label: "RTX 3090 24GB" }
             ],
             "rtx 40": [
+                { val: "rtx 4050", label: "RTX 4050 6GB" },
                 { val: "rtx 4060", label: "RTX 4060 8GB" },
                 { val: "rtx 4060 ti", label: "RTX 4060 Ti 8GB" },
                 { val: "rtx 4060 ti 16gb", label: "RTX 4060 Ti 16GB" },
@@ -522,6 +822,8 @@ const dadosGpu = {
                 { val: "rtx 4090", label: "RTX 4090 24GB" }
             ],
             "rtx 50": [
+                { val: "rtx 5050", label: "RTX 5050 8GB" },
+                { val: "rtx 5060", label: "RTX 5060 8GB" },
                 { val: "rtx 5070", label: "RTX 5070 12GB" },
                 { val: "rtx 5070 ti", label: "RTX 5070 Ti 16GB" },
                 { val: "rtx 5080", label: "RTX 5080 16GB" },
@@ -532,40 +834,53 @@ const dadosGpu = {
     amd: {
         series: [
             { val: "rx 500", label: "Série RX 500 (Básica / Usada)" },
+            { val: "rx 5000", label: "Série RX 5000 (Legado)" },
             { val: "rx 6000", label: "Série RX 6000 (Custo-Benefício)" },
             { val: "rx 7000", label: "Série RX 7000 (Geração Atual)" },
-            { val: "rx 8000", label: "Série RX 8000 (Nova Geração)" }
+            { val: "rx 9000", label: "Série RX 9000 (Nova Geração)" }
         ],
         modelos: {
             "rx 500": [
-                { val: "rx 550", label: "RX 550 4GB" },
+                { val: "rx 570", label: "RX 570 4GB/8GB" },
                 { val: "rx 580", label: "RX 580 8GB" },
                 { val: "rx 590", label: "RX 590 8GB" }
             ],
+            "rx 5000": [
+                { val: "rx 5300", label: "RX 5300 3GB" },
+                { val: "rx 5500 xt", label: "RX 5500 XT 4GB/8GB" },
+                { val: "rx 5600 xt", label: "RX 5600 XT 6GB" },
+                { val: "rx 5700", label: "RX 5700 8GB" },
+                { val: "rx 5700 xt", label: "RX 5700 XT 8GB" }
+            ],
             "rx 6000": [
+                { val: "rx 6300", label: "RX 6300 2GB" },
                 { val: "rx 6400", label: "RX 6400 4GB" },
                 { val: "rx 6500 xt", label: "RX 6500 XT 4GB" },
                 { val: "rx 6600", label: "RX 6600 8GB" },
                 { val: "rx 6600 xt", label: "RX 6600 XT 8GB" },
                 { val: "rx 6650 xt", label: "RX 6650 XT 8GB" },
+                { val: "rx 6700", label: "RX 6700 10GB" },
                 { val: "rx 6700 xt", label: "RX 6700 XT 12GB" },
                 { val: "rx 6750 xt", label: "RX 6750 XT 12GB" },
+                { val: "rx 6800", label: "RX 6800 16GB" },
                 { val: "rx 6800 xt", label: "RX 6800 XT 16GB" },
-                { val: "rx 6900 xt", label: "RX 6900 XT 16GB" }
+                { val: "rx 6900 xt", label: "RX 6900 XT 16GB" },
+                { val: "rx 6950 xt", label: "RX 6950 XT 16GB" }
             ],
             "rx 7000": [
+                { val: "rx 7400", label: "RX 7400 8GB" },
                 { val: "rx 7600", label: "RX 7600 8GB" },
-                { val: "rx 7600 xt", label: "RX 7600 XT 16GB" },
-                { val: "rx 7700 xt", label: "RX 7700 XT 12GB" },
+                { val: "rx 7650", label: "RX 7650 GRE 8GB" },
+                { val: "rx 7700", label: "RX 7700 12GB" },
                 { val: "rx 7800 xt", label: "RX 7800 XT 16GB" },
                 { val: "rx 7900 gre", label: "RX 7900 GRE 16GB" },
                 { val: "rx 7900 xt", label: "RX 7900 XT 20GB" },
                 { val: "rx 7900 xtx", label: "RX 7900 XTX 24GB" }
             ],
-            "rx 8000": [
-                { val: "rx 8600 xt", label: "RX 8600 XT" },
-                { val: "rx 8700 xt", label: "RX 8700 XT" },
-                { val: "rx 8800 xt", label: "RX 8800 XT" }
+            "rx 9000": [
+                { val: "rx 9050", label: "RX 9050 8GB" },
+                { val: "rx 9060", label: "RX 9060 8GB/16GB" },
+                { val: "rx 9070", label: "RX 9070 12GB/16GB" }
             ]
         }
     },
@@ -665,21 +980,27 @@ function atualizarGpuModelos(serie, modeloSel) {
 selectGpuMarca.addEventListener('change', () => atualizarGpuSeries(null, null));
 selectGpuSerie.addEventListener('change', (e) => atualizarGpuModelos(e.target.value, null));
 
-// Auto-check setup completo
-const checkboxSetup = document.getElementById('montarSetupCheckbox');
-const seletores = document.querySelectorAll('.seletor-peca');
-
-function checarMultiplos() {
-    let preenchidos = 0;
-    seletores.forEach(s => {
-        if (s.value !== '') preenchidos++;
-    });
-    if (checkboxSetup) {
-        checkboxSetup.checked = preenchidos >= 2;
-    }
+// Reseta os selects dependentes quando o select de cima muda
+function resetSelect(id) {
+    const el = document.getElementById(id);
+    if (el && el.options.length > 0) el.selectedIndex = 0;
 }
 
-seletores.forEach(s => s.addEventListener('change', checarMultiplos));
+// CPU: linha -> geração
+selectCpuLinha.addEventListener('change', () => resetSelect('cpu_gen'));
+
+// RAM: equipamento -> capacidade e padrão DDR | capacidade -> padrão DDR
+document.getElementById('ram_tipo').addEventListener('change', () => {
+    resetSelect('ram_cap');
+    resetSelect('ram_ddr');
+});
+document.getElementById('ram_cap').addEventListener('change', () => resetSelect('ram_ddr'));
+
+// Armazenamento: tipo -> capacidade
+document.getElementById('disco_tipo').addEventListener('change', () => resetSelect('disco_cap'));
+
+// Cooler: tipo -> estilo
+document.getElementById('cooler_tipo').addEventListener('change', () => resetSelect('cooler_estilo'));
 
 // Mantém as sanfonas e selects preenchidos após o submit
 document.addEventListener('DOMContentLoaded', () => {
@@ -712,6 +1033,16 @@ document.addEventListener('DOMContentLoaded', () => {
         document.getElementById('gpu_marca').closest('.accordion-content').classList.add('open');
         document.getElementById('gpu_marca').closest('.accordion-item').querySelector('.accordion-btn').classList.add('active');
     }
+
+    // Mantém abertos os grupos que têm algum filtro preenchido
+    // (ex.: só o tipo da RAM ou só o tipo do armazenamento)
+    document.querySelectorAll('.accordion-item').forEach(item => {
+        const temFiltro = Array.from(item.querySelectorAll('select')).some(s => s.value !== '');
+        if (temFiltro) {
+            item.querySelector('.accordion-content').classList.add('open');
+            item.querySelector('.accordion-btn').classList.add('active');
+        }
+    });
 });
 </script>
 

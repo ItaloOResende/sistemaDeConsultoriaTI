@@ -45,7 +45,7 @@ armazenamentoSizes = ["128gb", "256gb", "512gb", "1tb", "2tb"]
 # Configurações para busca de processadores Intel
 intelVendor = "intel"
 intelLines = ["i3", "i5", "i7", "i9"]  # Para incluir os Core Ultra, basta acrescentar aqui
-intelGenerations = ["8", "9","10", "11", "12", "13", "14"]
+intelGenerations = ["6", "7", "8", "9","10", "11", "12", "13", "14"]
 # Combinações que não existem no mercado de desktop (evita busca sem resultado)
 intelIndisponiveis = [("", "")]
 
@@ -147,19 +147,22 @@ def pesquisar_nvidia(vendor, series,generations,tiers):
     buscas = []
     #pesquisando e filtrando
     for g in generations:
-                for t in tiers:
-                    if g == "10":
-                        if int(t) < 80:
-                            buscas.append((f"{vendor} {series[0]} {g}{t}", series[0], g, t))
-                    elif g == '16':
-                            if int(t) < 60:
-                                buscas.append((f"{vendor} {series[0]} {g}{t}", series[0], g, t))
-                    elif int(g) > 16 and int(g) < 40:
-                        if int(t) > 30 and int(t) < 90:
-                            buscas.append((f"{vendor} {series[1]} {g}{t}", series[0], g, t))
-                    elif int(g) >= 40:
-                        if int(t) > 30:
-                            buscas.append((f"{vendor} {series[1]} {g}{t}", series[0], g, t))
+        for t in tiers:
+            if g == "10":
+                if int(t) >= 80:
+                    continue  # GTX 1080/1090 não existem
+            elif g == "16":
+                if int(t) >= 60:
+                    continue  # GTX 1660+ não fazem parte da busca por tier
+            elif 16 < int(g) < 40:
+                if not (30 < int(t) < 90):
+                    continue
+            elif int(g) >= 40:
+                if int(t) <= 30:
+                    continue
+            # Série usada na busca E no filtro (gtx até 16, rtx da 20 em diante)
+            serie = series[0] if int(g) <= 16 else series[1]
+            buscas.append((f"{vendor} {serie} {g}{t}", serie, g, t))
 
     # Dispara todas as buscas em paralelo
     for busca, s, g, t in buscas:
@@ -189,7 +192,7 @@ def pesquisar_amd_gpu(vendor,series,generations):
     for g, busca in buscas:
         filtrarGpus.filtrar_amd_gpu("csvs/Produtos Ordenados.csv",vendor,series,g)
 
-def pesquisar_intel_cpu(vendor, lines, generations, videoIntegrado=None):
+def pesquisar_intel_cpu(vendor, lines, generations):
     # Limpa o CSV anterior antes de popular os novos
     with open('csvs/preços.csv', 'w', newline='', encoding='utf-8') as f:
         pass
@@ -321,12 +324,15 @@ def pesquisar_gabinetes(tipos=None):
     resultados = []
     buscas = []
     for tipo in tipos:
-        buscas.append(f"gabinete {tipo}")
-     
-    for busca in buscas:
+        buscas.append((tipo, f"gabinete {tipo}"))
+
+    # Dispara todas as buscas em paralelo
+    for tipo, busca in buscas:
         resultados.append(pool.submit(pesquisa, busca))
     pool.shutdown(wait=True)
-    for busca in buscas:
+
+    # Filtra os resultados de cada busca
+    for tipo, busca in buscas:
         try:
             filtrarGabinetes.filtrar_gabinetes('csvs/Produtos Ordenados.csv', tipo)
             print(f"Filtragem de {busca} concluidas ")
@@ -371,8 +377,6 @@ if __name__ == '__main__':
     pesquisar_nvidia(gpuVendors[0], nvidiaSeries, nvidiaGenerations, nvidiaTiers) # PESQUISA PLACAS DE VIDEO NVIDIA DESDE A GTX1050 PRA CIMA
     pesquisar_intel_cpu(intelVendor, intelLines, intelGenerations) #PESQUISA PROCESSADORES INTEL CORE DA 10ª A 14ª GERAÇÃO
     pesquisar_amd_cpu(amdRyzenLines, amdRyzenGenerations, "amd",) #PESQUISA PROCESSADORES AMD RYZEN (1 BUSCA POR SKU)
-    pesquisar_amd_cpu() #PESQUISA PROCESSADORES AMD RYZEN (1 BUSCA POR SKU)
-    pesquisar_intel_cpu(intelVendor, intelLines, intelGenerations, "todos") #PESQUISA  OS INTEL CORE COM E SEM VIDEO INTEGRADO
     pesquisar_amd_gpu(gpuVendors[1],AMDSeries,radeon5HSeries)
     pesquisar_amd_gpu(gpuVendors[1],AMDSeries,radeon5TSeries)
     pesquisar_amd_gpu(gpuVendors[1],AMDSeries,radeon6TSeries)

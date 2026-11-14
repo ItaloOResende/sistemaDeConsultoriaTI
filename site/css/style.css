@@ -318,3 +318,101 @@ select:focus {
     border-radius: 12px;
     color: var(--text-muted);
 }
+/* --- Oferta mais barata + alternativas --- */
+.destaque-menor {
+    border-color: rgba(52, 211, 153, 0.55);
+}
+
+.alternativas {
+    margin-top: 0.6rem;
+}
+
+.alternativas summary {
+    cursor: pointer;
+    color: var(--text-muted);
+    font-size: 0.8rem;
+    font-weight: 700;
+    padding: 0.35rem 0;
+    user-select: none;
+}
+
+.alternativas summary:hover {
+    color: var(--primary);
+}
+
+.alternativa {
+    display: flex;
+    align-items: center;
+    gap: 0.75rem;
+    padding: 0.55rem 0.8rem;
+    border: 1px solid var(--border);
+    border-radius: 6px;
+    margin-top: 0.4rem;
+    text-decoration: none;
+    color: inherit;
+    font-size: 0.85rem;
+    transition: border-color 0.15s;
+}
+
+.alternativa:hover {
+    border-color: var(--primary);
+}
+
+.alt-titulo {
+    flex: 1;
+    overflow: hidden;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+}
+
+.alt-preco {
+    color: var(--accent-green);
+    font-weight: 700;
+    white-space: nowrap;
+}
+
+.sem-oferta {
+    color: var(--text-muted);
+    padding: 0.4rem 0;
+    line-height: 1.5;
+}
+
+.dica {
+    font-size: 0.75rem;
+    margin-top: 0.45rem;
+    color: var(--text-muted);
+}
+
+.dica code {
+    color: #fbbf24;
+    word-break: break-all;
+}
+
+/* --- Telas menores --- */
+@media (max-width: 900px) {
+    .dashboard-container {
+        flex-direction: column;
+        padding: 1rem;
+        gap: 1rem;
+    }
+
+    .sidebar {
+        width: 100%;
+        min-width: 0;
+        position: static;
+        max-height: none;
+    }
+
+    .summary-banner {
+        flex-direction: column;
+        align-items: flex-start;
+        gap: 1rem;
+    }
+
+    .product-card,
+    .alternativa {
+        flex-direction: column;
+        align-items: flex-start;
+        gap: 0.5rem;
+    }
+}

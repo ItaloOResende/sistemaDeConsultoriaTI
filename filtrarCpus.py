@@ -19,6 +19,8 @@ excluirCpuAmd = (
 
 # Soquete (socket) das gerações Intel Core desktop
 intelSoquetes = {
+    "6": "LGA 1151",
+    "7": "LGA 1151",
     "8": "LGA 1151",
     "9": "LGA 1151",
     "10": "LGA 1200",
