@@ -43,6 +43,70 @@ $perfilBusca = $_GET['perfil_busca'] ?? 'barato';
 $modoSetup   = ($_GET['montar_setup'] ?? '') === '1';
 
 // ---------------------------------------------------------------------------
+// Identidade e contatos do sistema
+// ---------------------------------------------------------------------------
+$nomeSistema   = 'TechCota';
+$sloganSistema = 'Consultoria & Cotação de Hardware';
+$siglaSistema  = 'TC';
+$anoAtual      = date('Y');
+
+$contatos = [
+    [
+        'nome'      => 'Ítalo Oliveira',
+        'linkedin'  => 'https://www.linkedin.com/in/italooresende/',
+        'instagram' => 'https://www.instagram.com/italoliveires/?hl=pt-br',
+        'whatsapp'  => '5531984534766',
+        'email'     => 'italoliveira5@gmail.com',
+    ],
+    [
+        'nome'      => 'Igor Quintino',
+        'linkedin'  => 'https://www.linkedin.com/in/quintino-igor/',
+        'instagram' => 'https://www.instagram.com/igorcquintino/?hl=pt-br',
+        'whatsapp'  => '5531989487756',
+        'email'     => 'igorcquintino@hotmail.com',
+    ],
+];
+
+$mensagemContato = 'Olá! Vim pelo site ' . $nomeSistema . ' e gostaria de falar sobre um orçamento.';
+$assuntoContato  = 'Contato pelo site ' . $nomeSistema;
+
+function urlLinkedin($valor) {
+    $valor = trim((string) $valor);
+    if ($valor === '') return '';
+    if (preg_match('~^https?://~i', $valor)) return $valor;
+    return 'https://www.linkedin.com/in/' . rawurlencode(trim($valor, '/'));
+}
+
+function urlInstagram($valor) {
+    $valor = trim((string) $valor);
+    if ($valor === '') return '';
+    if (preg_match('~^https?://~i', $valor)) return $valor;
+    return 'https://www.instagram.com/' . rawurlencode(trim($valor, '/'));
+}
+
+function urlWhatsapp($valor, $mensagem) {
+    $numero = preg_replace('/\D/', '', (string) $valor);
+    if ($numero === '') return '';
+    return 'https://wa.me/' . $numero . '?text=' . rawurlencode($mensagem);
+}
+
+function urlEmail($email, $assunto, $corpo = '') {
+    $email = trim((string) $email);
+    if ($email === '') return '';
+    return 'https://mail.google.com/mail/?view=cm&fs=1'
+        . '&to=' . rawurlencode($email)
+        . '&su=' . rawurlencode($assunto)
+        . ($corpo !== '' ? '&body=' . rawurlencode($corpo) : '');
+}
+
+$iconesRedes = [
+    'linkedin' => '<svg viewBox="0 0 24 24" width="18" height="18" fill="currentColor" aria-hidden="true"><path d="M4.98 3.5a2.5 2.5 0 1 1-4.96 0 2.5 2.5 0 0 1 4.96 0ZM.5 8h4v16h-4V8Zm7.5 0h3.8v2.2h.05c.53-1 1.83-2.2 3.77-2.2 4.03 0 4.78 2.65 4.78 6.1V24h-4v-8.5c0-2.03-.04-4.64-2.83-4.64-2.83 0-3.27 2.2-3.27 4.5V24h-4V8Z"/></svg>',
+    'instagram' => '<svg viewBox="0 0 24 24" width="18" height="18" fill="none" stroke="currentColor" stroke-width="2" aria-hidden="true"><rect x="2.5" y="2.5" width="19" height="19" rx="5"/><circle cx="12" cy="12" r="4.2"/><circle cx="17.6" cy="6.4" r="1.2" fill="currentColor" stroke="none"/></svg>',
+    'whatsapp' => '<svg viewBox="0 0 24 24" width="18" height="18" fill="currentColor" aria-hidden="true"><path d="M12.04 2C6.6 2 2.2 6.4 2.2 11.84c0 1.74.46 3.44 1.32 4.94L2 22l5.34-1.4a9.8 9.8 0 0 0 4.7 1.2h.01c5.43 0 9.84-4.4 9.84-9.84C21.89 6.4 17.48 2 12.04 2Zm5.77 14.06c-.24.68-1.42 1.3-1.96 1.35-.54.06-1.05.08-1.81-.11-.45-.11-1.03-.33-1.77-.65-3.11-1.34-5.14-4.47-5.3-4.68-.15-.2-1.26-1.68-1.26-3.2 0-1.53.8-2.28 1.08-2.6.28-.31.61-.39.82-.39.2 0 .41 0 .59.01.19.01.44-.07.69.53.25.6.85 2.08.93 2.23.07.15.12.33.02.53-.1.2-.2.33-.4.51-.2.18-.42.4-.6.54-.2.2-.41.42-.18.82.23.4 1.02 1.68 2.18 2.72 1.5 1.33 2.76 1.74 3.16 1.94.4.2.63.17.86-.1.23-.28.99-1.16 1.25-1.56.26-.4.53-.33.89-.2.36.13 2.3 1.08 2.7 1.28.4.2.66.3.76.47.1.16.1.96-.14 1.64Z"/></svg>',
+    'email' => '<svg viewBox="0 0 24 24" width="18" height="18" fill="none" stroke="currentColor" stroke-width="2" aria-hidden="true"><rect x="2" y="4" width="20" height="16" rx="2"/><path d="m3 6 9 7 9-7"/></svg>',
+];
+
+// ---------------------------------------------------------------------------
 // Funções auxiliares
 // ---------------------------------------------------------------------------
 function chaveProduto($link, $titulo) {
@@ -437,16 +501,32 @@ $erroTerminal = '';
 <head>
     <link rel="stylesheet" href="../css/style.css">
     <meta charset="UTF-8">
-    <title>Consultoria TI - Painel de Cotação</title>
+    <meta name="viewport" content="width=device-width, initial-scale=1">
+    <meta name="description" content="<?= htmlspecialchars($nomeSistema) ?> — compare preços de peças de PC nas principais lojas e monte seu setup pagando menos.">
+    <meta name="theme-color" content="#0b1120">
+    <title><?= htmlspecialchars($nomeSistema) ?> — Consultoria &amp; Cotação de Hardware</title>
 </head>
 <body>
+
+<!-- MENU FIXO -->
+<header class="topbar">
+    <div class="topbar-inner">
+        <a class="brand" href="index.php" aria-label="<?= htmlspecialchars($nomeSistema) ?> — página inicial">
+            <span class="brand-logo"><?= htmlspecialchars($siglaSistema) ?></span>
+            <span class="brand-text">
+                <span class="brand-name"><?= htmlspecialchars($nomeSistema) ?></span>
+                <span class="brand-tag"><?= htmlspecialchars($sloganSistema) ?></span>
+            </span>
+        </a>
+    </div>
+</header>
 
 <div class="dashboard-container">
     
     <!-- BARRA LATERAL (FILTROS) -->
-    <aside class="sidebar">
+    <aside class="sidebar" id="cotar">
         <div class="sidebar-header">
-            <h2>Consultoria TI</h2>
+            <h2><?= htmlspecialchars($nomeSistema) ?></h2>
             <p>Configurador & Cotação em Tempo Real</p>
         </div>
 
@@ -646,7 +726,7 @@ $erroTerminal = '';
     </aside>
 
     <!-- ÁREA PRINCIPAL -->
-    <main class="main-content">
+    <main class="main-content" id="resultados">
         
         <?php if (!empty($erroTerminal)): ?>
             <pre style="background:#1e1e2e; color:#f38ba8; padding:1.2rem; border-radius:8px; border:1px solid #f38ba8; overflow-x:auto; font-size:0.85rem;"><?= htmlspecialchars($erroTerminal) ?></pre>
@@ -731,6 +811,50 @@ $erroTerminal = '';
     </main>
 
 </div>
+
+<!-- RODAPÉ -->
+<footer class="site-footer" id="contato">
+    <div class="footer-inner">
+        <div class="footer-col footer-brand">
+            <a class="brand" href="index.php" aria-label="<?= htmlspecialchars($nomeSistema) ?> — página inicial">
+                <span class="brand-logo"><?= htmlspecialchars($siglaSistema) ?></span>
+                <span class="brand-name"><?= htmlspecialchars($nomeSistema) ?></span>
+            </a>
+            <p>Comparador de preços de hardware: encontre a peça mais barata nas principais lojas e monte seu setup com economia.</p>
+        </div>
+
+        <?php foreach ($contatos as $pessoa): ?>
+            <div class="footer-col">
+                <h4><?= htmlspecialchars($pessoa['nome']) ?></h4>
+                <div class="social-links">
+                    <?php
+                    $linksPessoa = [
+                        'linkedin'  => ['rotulo' => 'LinkedIn',  'url' => urlLinkedin($pessoa['linkedin'])],
+                        'instagram' => ['rotulo' => 'Instagram', 'url' => urlInstagram($pessoa['instagram'])],
+                        'whatsapp'  => ['rotulo' => 'WhatsApp',  'url' => urlWhatsapp($pessoa['whatsapp'], $mensagemContato)],
+                        'email'     => ['rotulo' => 'E-mail',    'url' => urlEmail($pessoa['email'], $assuntoContato, $mensagemContato)],
+                    ];
+                    ?>
+                    <?php foreach ($linksPessoa as $tipo => $link): ?>
+                        <?php if ($link['url'] !== ''): ?>
+                            <a class="social-link social-<?= $tipo ?>"
+                               href="<?= htmlspecialchars($link['url']) ?>"
+                               target="_blank" rel="noopener"
+                               title="<?= htmlspecialchars($link['rotulo']) ?> de <?= htmlspecialchars($pessoa['nome']) ?>">
+                                <?= $iconesRedes[$tipo] ?>
+                                <span><?= htmlspecialchars($link['rotulo']) ?></span>
+                            </a>
+                        <?php endif; ?>
+                    <?php endforeach; ?>
+                </div>
+            </div>
+        <?php endforeach; ?>
+    </div>
+
+    <div class="footer-bottom">
+        &copy; <?= $anoAtual ?> <strong><?= htmlspecialchars($nomeSistema) ?></strong> — Consultoria &amp; Cotação de Hardware. Todos os direitos reservados.
+    </div>
+</footer>
 
 <script>
 // Dados para CPU
@@ -1042,6 +1166,14 @@ document.addEventListener('DOMContentLoaded', () => {
             item.querySelector('.accordion-content').classList.add('open');
             item.querySelector('.accordion-btn').classList.add('active');
         }
+    });
+});
+
+// Best-effort: o link abre em nova guia e tentamos devolver o foco para esta.
+// Quem decide é o navegador; em alguns ele ignora essa chamada.
+document.querySelectorAll('.social-link').forEach(link => {
+    link.addEventListener('click', () => {
+        setTimeout(() => { try { window.focus(); } catch (err) {} }, 80);
     });
 });
 </script>
