@@ -39,7 +39,7 @@ def filtrar_placas_mae(file_path, soquete):
     csvName = f"csvs/placa_mae_{soquete.replace(' ', '_').lower()}.csv"
 
     try:
-        df = pd.read_csv(file_path, encoding='latin1', skiprows=1, header=None, names=['Produto', 'Preço', 'Link'])
+        df = pd.read_csv(file_path, encoding='utf-8', skiprows=1, header=None, names=['Produto', 'Preço', 'Link'])
 
         df["Preço"] = pd.to_numeric(df["Preço"], errors='coerce')
         dfOrdenado = df.dropna(subset=["Preço"]).sort_values(by='Preço', ascending=True).reset_index(drop=True)
@@ -57,11 +57,11 @@ def filtrar_placas_mae(file_path, soquete):
         # Adiciona o tamanho logo após o Produto: Produto, Tamanho, Preço, Link
         dfFiltrado.insert(1, "Tamanho", dfFiltrado['Produto'].map(identificar_tamanho))
 
-        dfFiltrado.to_csv(csvName, index=False)
+        dfFiltrado.to_csv(csvName, index=False, encoding='utf-8')
         if dfFiltrado.empty:
             print(f"nenhuma placa-mae {soquete} encontrada")
             return None
-        return pd.read_csv(csvName, nrows=10)
+        return pd.read_csv(csvName, nrows=10, encoding='utf-8')
     except Exception as e:
         print(f"Ocorreu um erro ao filtrar o arquivo CSV: {e}")
         return None

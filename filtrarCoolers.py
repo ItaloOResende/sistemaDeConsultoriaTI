@@ -13,7 +13,7 @@ def filtrar_coolers(file_path, tipo, estilo):
     csvName = f"csvs/{tipo.replace(' ', '_')}_{estilo}.csv"
 
     try:
-        df = pd.read_csv(file_path, encoding='latin1', skiprows=1, header=None, names=['Produto', 'Preço', 'Link'])
+        df = pd.read_csv(file_path, encoding='utf-8', skiprows=1, header=None, names=['Produto', 'Preço', 'Link'])
 
         df["Preço"] = pd.to_numeric(df["Preço"], errors='coerce')
         dfOrdenado = df.dropna(subset=["Preço"]).sort_values(by='Preço', ascending=True).reset_index(drop=True)
@@ -29,11 +29,11 @@ def filtrar_coolers(file_path, tipo, estilo):
             dfFiltrado = dfFiltrado[~dfFiltrado['Produto'].str.contains("rgb|argb", case=False, na=False)]
         # Exclui kits, processadores e outros produtos que não são coolers
         dfFiltrado = dfFiltrado[~dfFiltrado['Produto'].str.contains("notebook|processador|ssd|pc gamer", case=False, na=False)]
-        dfFiltrado.to_csv(csvName, index=False)
+        dfFiltrado.to_csv(csvName, index=False, encoding='utf-8')
         if dfFiltrado.empty:
             print(f"nenhum cooler {tipo} {estilo} encontrado")
             return None
-        return pd.read_csv(csvName, nrows=10)
+        return pd.read_csv(csvName, nrows=10, encoding='utf-8')
     except Exception as e:
         print(f"Ocorreu um erro ao filtrar o arquivo CSV: {e}")
         return None

@@ -13,7 +13,7 @@ def filtrar_nvidia(file_path, series, generation, tier):
     csvName = f"csvs/nvidia_{series}_{generation}{tier}.csv"
 
     try:
-        df = pd.read_csv(file_path, encoding='latin1', skiprows=1, header=None, names=['Produto', 'Preço', 'Link'])
+        df = pd.read_csv(file_path, encoding='utf-8', skiprows=1, header=None, names=['Produto', 'Preço', 'Link'])
         # Corrige encoding dos títulos
         df["Produto"] = (
             df["Produto"]
@@ -27,8 +27,8 @@ def filtrar_nvidia(file_path, series, generation, tier):
         dfFiltrado = dfOrdenado[dfOrdenado['Produto'].str.contains(series, case=False, na=False) & dfOrdenado['Produto'].str.contains(gpuFilter, case=False, na=False)]
         # Exclui kits e outros produtos
         dfFiltrado = dfFiltrado[~dfFiltrado['Produto'].str.contains("PC Gamer|SSD|AMD|Intel|suporte", case=False, na=False)]
-        dfFiltrado.to_csv(csvName, index=False)
-        return pd.read_csv(csvName, nrows=10)
+        dfFiltrado.to_csv(csvName, index=False, encoding='utf-8')
+        return pd.read_csv(csvName, nrows=10, encoding='utf-8')
     except Exception as e:
         print(f"Ocorreu um erro ao filtrar o arquivo CSV: {e}")
         return None
@@ -38,7 +38,7 @@ def filtrar_amd_gpu(file_path, vendor, series, generation):
     csvName = f"csvs/{vendor}_{series}_{generation}.csv"
 
     try:
-        df = pd.read_csv(file_path, encoding='latin1', skiprows=1, header=None, names=['Produto', 'Preço', 'Link'])
+        df = pd.read_csv(file_path, encoding='utf-8', skiprows=1, header=None, names=['Produto', 'Preço', 'Link'])
         df["Produto"] = (
             df["Produto"]
             .astype(str)
@@ -51,8 +51,8 @@ def filtrar_amd_gpu(file_path, vendor, series, generation):
         dfFiltrado = dfOrdenado[dfOrdenado['Produto'].str.contains(series, case=False, na=False) & dfOrdenado['Produto'].str.contains(gpuFilter, case=False, na=False)]
         # Exclui kits e outros produtos
         dfFiltrado = dfFiltrado[~dfFiltrado['Produto'].str.contains("PC Gamer|SSD|Nvidia|Intel|ryzen|suporte", case=False, na=False)]
-        dfFiltrado.to_csv(csvName, index=False)
-        return pd.read_csv(csvName, nrows=10)
+        dfFiltrado.to_csv(csvName, index=False, encoding='utf-8')
+        return pd.read_csv(csvName, nrows=10, encoding='utf-8')
     except Exception as e:
         print(f"Ocorreu um erro ao filtrar o arquivo CSV: {e}")
         return None

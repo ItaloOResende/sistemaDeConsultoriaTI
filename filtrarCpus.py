@@ -56,7 +56,7 @@ def ler_precos(file_path):
 
     Aceita tanto 'Produtos Ordenados.csv' (já tratado) quanto 'preços.csv' cru.
     """
-    df = pd.read_csv(file_path, encoding='latin1', skiprows=1, header=None, names=['Produto', 'Preço', 'Link'])
+    df = pd.read_csv(file_path, encoding='utf-8', skiprows=1, header=None, names=['Produto', 'Preço', 'Link'])
     precos = df["Preço"].astype(str).str.replace(r"[^\d,.]", "", regex=True)  # Remove símbolos
 
     # Trata formato brasileiro (vírgula decimal)
@@ -101,10 +101,10 @@ def filtrar_intel_cpu(file_path, linha, geracao):
         soquete = intelSoquetes.get(str(geracao).strip(), "")
         dfFiltrado.insert(1, "Soquete", soquete)
 
-        dfFiltrado.to_csv(csvName, index=False)
+        dfFiltrado.to_csv(csvName, index=False, encoding='utf-8')
         if dfFiltrado.empty:
             return None
-        return pd.read_csv(csvName, nrows=10)
+        return pd.read_csv(csvName, nrows=10, encoding='utf-8')
     except Exception as e:
         print(f"Ocorreu um erro ao filtrar o arquivo CSV: {e}")
         return None
@@ -142,10 +142,10 @@ def filtrar_amd_cpu(file_path, linha, geracao):
         soquete = amdSoquetes.get(str(geracao).strip(), "")
         dfFiltrado.insert(1, "Soquete", soquete)
 
-        dfFiltrado.to_csv(csvName, index=False)
+        dfFiltrado.to_csv(csvName, index=False, encoding='utf-8')
         if dfFiltrado.empty:
             return None
-        return pd.read_csv(csvName, nrows=10)
+        return pd.read_csv(csvName, nrows=10, encoding='utf-8')
     except Exception as e:
         print(f"Erro ao filtrar AMD: {e}")
         return None

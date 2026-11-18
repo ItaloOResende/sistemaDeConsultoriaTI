@@ -10,7 +10,7 @@ def prepara_tabela(file_path):
 
     try:
         # Lê CSV com produtos, preços e links
-        df = pd.read_csv(file_path, encoding='latin1', header=None, names=['Produto', 'Preço', 'Link'])
+        df = pd.read_csv(file_path, encoding='utf-8', header=None, names=['Produto', 'Preço', 'Link'])
         # Limpa e converte o campo de preço para numérico
         df["Preço"] = (
             df["Preço"]
@@ -26,8 +26,8 @@ def prepara_tabela(file_path):
         # Ordena por preço crescente
         dfOrdenado = df.sort_values(by='Preço', ascending=True).reset_index(drop=True)
         # Salva tabela ordenada
-        dfOrdenado.to_csv('csvs/Produtos Ordenados.csv', index=False)
-        return pd.read_csv('csvs/Produtos Ordenados.csv', header=None)
+        dfOrdenado.to_csv('csvs/Produtos Ordenados.csv', index=False, encoding='utf-8')
+        return pd.read_csv('csvs/Produtos Ordenados.csv', header=None, encoding='utf-8')
     except Exception as e:
         resultado = f"Ocorreu um erro ao organizar o arquivo CSV: {e}"
         return resultado

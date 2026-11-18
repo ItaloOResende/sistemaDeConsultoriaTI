@@ -13,7 +13,7 @@ def filtrar_amazenamento(file_path, armType, armVariant, armSize):
     csvName = f"csvs/{armType}_{armVariant}_{armSize}.csv"
 
     try:
-        df = pd.read_csv(file_path, encoding='latin1', skiprows=1, header=None, names=['Produto', 'Preço', 'Link'])
+        df = pd.read_csv(file_path, encoding='utf-8', skiprows=1, header=None, names=['Produto', 'Preço', 'Link'])
 
         df["Preço"] = pd.to_numeric(df["Preço"])
         dfOrdenado = df.sort_values(by='Preço', ascending=True).reset_index(drop=True)
@@ -57,9 +57,9 @@ def filtrar_amazenamento(file_path, armType, armVariant, armSize):
                     case _:
                         print("armazenamento invalido")                                            
         
-        dfFiltrado.to_csv(csvName, index=False)
+        dfFiltrado.to_csv(csvName, index=False, encoding='utf-8')
         #print(dfOrdenado.to_string(index=False))
-        return pd.read_csv(csvName, nrows=10)
+        return pd.read_csv(csvName, nrows=10, encoding='utf-8')
     except Exception as e:
         print(f"Ocoreru um erro ao filtrar o arquivo CSV: {e}")
         return None

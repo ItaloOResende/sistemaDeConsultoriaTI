@@ -14,7 +14,7 @@ def filtrar_fontes(file_path, capacidade):
     csvName = f"csvs/fonte_{capacidade.lower()}.csv"
 
     try:
-        df = pd.read_csv(file_path, encoding='latin1', skiprows=1, header=None, names=['Produto', 'Preço', 'Link'])
+        df = pd.read_csv(file_path, encoding='utf-8', skiprows=1, header=None, names=['Produto', 'Preço', 'Link'])
 
         df["Preço"] = pd.to_numeric(df["Preço"], errors='coerce')
         dfOrdenado = df.dropna(subset=["Preço"]).sort_values(by='Preço', ascending=True).reset_index(drop=True)
@@ -23,11 +23,11 @@ def filtrar_fontes(file_path, capacidade):
         dfFiltrado = dfOrdenado[dfOrdenado['Produto'].str.contains(capacidadeFilter, case=False, na=False, regex=True)]
         # Só fontes com certificação 80 Plus no título
         dfFiltrado = dfFiltrado[dfFiltrado['Produto'].str.contains(r"80\s*plus", case=False, na=False, regex=True)]
-        dfFiltrado.to_csv(csvName, index=False)
+        dfFiltrado.to_csv(csvName, index=False, encoding='utf-8')
         if dfFiltrado.empty:
             print(f"nenhuma fonte {capacidade} encontrada")
             return None
-        return pd.read_csv(csvName, nrows=10)
+        return pd.read_csv(csvName, nrows=10, encoding='utf-8')
     except Exception as e:
         print(f"Ocorreu um erro ao filtrar o arquivo CSV: {e}")
         return None
