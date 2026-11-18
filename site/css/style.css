@@ -1172,6 +1172,14 @@ select:focus {
     font-weight: 800;
 }
 
+.cliente-peca-preco {
+    margin-left: auto;
+    flex-shrink: 0;
+    color: var(--primary);
+    font-weight: 700;
+    white-space: nowrap;
+}
+
 /* --- Conta --- */
 .conta-topo {
     display: flex;

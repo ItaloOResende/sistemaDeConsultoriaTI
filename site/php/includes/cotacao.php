@@ -120,12 +120,13 @@ function arquivosExistentes(array $padroes)
  * Junta todos os arquivos, remove itens repetidos (mesmo link de produto)
  * e devolve a lista ordenada do mais barato para o mais caro.
  */
-function coletarProdutos(array $padroes)
+function coletarProdutos(array $padroes, ?callable $filtro = null)
 {
     $unicos = [];
 
     foreach (arquivosExistentes($padroes) as $arquivo) {
         foreach (lerProdutosDoCsv($arquivo) as $item) {
+            if ($filtro !== null && !$filtro($item)) continue;
             $chave = chaveProduto($item['link'], $item['titulo']);
             if (!isset($unicos[$chave]) || $item['precoNum'] < $unicos[$chave]['precoNum']) {
                 $unicos[$chave] = $item;
@@ -143,7 +144,7 @@ function coletarProdutos(array $padroes)
  *
  * @return array<string, string>
  */
-function normalizarEntrada(array $get, bool $modoSetup, string $perfilBusca): array
+function normalizarEntrada(array $get, bool $modoSetup, string $perfilBusca, bool $aplicarPadroes = true): array
 {
     $entrada = [
         'cpu_marca'     => strtolower(trim($get['cpu_marca'] ?? '')),
@@ -165,8 +166,10 @@ function normalizarEntrada(array $get, bool $modoSetup, string $perfilBusca): ar
         'cooler_estilo' => strtolower(trim($get['cooler_estilo'] ?? '')),
     ];
 
-    // Valores padrão do "Montar Setup Completo"
-    if ($modoSetup) {
+    // Valores padrão do "Montar Setup Completo".
+    // Quando o usuário pede para completar o PC, esses padrões são ignorados:
+    // as peças faltantes são escolhidas pela compatibilidade real.
+    if ($modoSetup && $aplicarPadroes) {
         if ($entrada['cpu_marca'] === '') {
             $entrada['cpu_marca'] = 'amd';
             $entrada['cpu_linha'] = ($perfilBusca === 'desempenho') ? 'ryzen 7' : 'ryzen 5';
@@ -185,6 +188,426 @@ function normalizarEntrada(array $get, bool $modoSetup, string $perfilBusca): ar
     return $entrada;
 }
 
+// ---------------------------------------------------------------------------
+// Completar o PC: escolhe, para cada peça faltante, o item mais barato que seja
+// compatível com o que o usuário já selecionou.
+// ---------------------------------------------------------------------------
+
+function itemEhMemoriaRam(array $item): bool
+{
+    $titulo = mb_strtolower($item['titulo']);
+    if (strpos($titulo, 'mem') === false && strpos($titulo, 'ram') === false) return false;
+    if (preg_match('/placa de v[íi]deo|gpu|ventoinha|ssd|hd /', $titulo)) return false;
+    return true;
+}
+
+function normalizarCapacidadeFonte(string $token): int
+{
+    return (int) preg_replace('/\D/', '', $token);
+}
+
+function estimarWattsCpu(string $marca, string $linha, string $gen): int
+{
+    if ($marca === 'intel') {
+        $linhaNum = (int) preg_replace('/\D/', '', $linha);
+        if ($linhaNum >= 9) return 125;
+        if ($linhaNum >= 7) return 95;
+        return 65;
+    }
+
+    $linhaNum = (int) preg_replace('/\D/', '', $linha);
+    if ($linhaNum >= 9) return 105;
+    return 65;
+}
+
+function estimarWattsGpu(string $titulo): int
+{
+    $titulo = mb_strtolower($titulo);
+    $modelos = [
+        '1050' => 75, '1060' => 120, '1070' => 150, '1080' => 180,
+        '2050' => 75, '2060' => 160, '2080' => 210,
+        '3050' => 130, '3060' => 170, '3070' => 220, '3080' => 320,
+        '4060' => 115, '4080' => 320,
+        '5050' => 130, '5060' => 180, '5070' => 250, '5080' => 320, '5090' => 450,
+        '570' => 150, '580' => 185, '590' => 225,
+        '6300' => 100, '6400' => 100, '6500' => 100, '6600' => 130,
+        '6650' => 150, '6700' => 175, '6750' => 175, '6800' => 250,
+        '6900' => 300, '6950' => 300,
+        '7400' => 120, '7600' => 165, '7650' => 165, '7700' => 175,
+        '7800' => 250, '7900' => 300,
+        '9050' => 150, '9060' => 180, '9070' => 220,
+    ];
+
+    foreach ($modelos as $modelo => $watts) {
+        if (preg_match('/(?<!\d)' . preg_quote($modelo, '/') . '(?!\d)/', $titulo)) {
+            return $watts;
+        }
+    }
+    return 150;
+}
+
+function socketEDdrDaCpu(string $marca, string $linha, string $gen): array
+{
+    $genNum = (int) preg_replace('/\D/', '', $gen);
+
+    if ($marca === 'intel') {
+        if ($genNum >= 12) return ['socket' => 'LGA 1700', 'ddr' => null];
+        if ($genNum >= 10) return ['socket' => 'LGA 1200', 'ddr' => 'ddr4'];
+        return ['socket' => 'LGA 1151', 'ddr' => 'ddr4'];
+    }
+
+    if ($genNum >= 7000) return ['socket' => 'AM5', 'ddr' => 'ddr5'];
+    return ['socket' => 'AM4', 'ddr' => 'ddr4'];
+}
+
+function slugSoquete(string $socket): string
+{
+    return strtolower(str_replace(' ', '_', $socket));
+}
+
+function dadosCpuDoArquivo(string $arquivo): ?array
+{
+    $nome = basename($arquivo);
+    if (preg_match('/^amd_ryzen_(\d+)_(\d+)\.csv$/', $nome, $m)) {
+        return ['cpu_marca' => 'amd', 'cpu_linha' => 'ryzen ' . $m[1], 'cpu_gen' => $m[2]];
+    }
+    if (preg_match('/^intel_i(\d+)_(\d+)\.csv$/', $nome, $m)) {
+        return ['cpu_marca' => 'intel', 'cpu_linha' => 'i' . $m[1], 'cpu_gen' => $m[2]];
+    }
+    return null;
+}
+
+function escolherPlacaMae(string $csvsDir, string $socket, ?string $ddr): ?string
+{
+    $arquivo = $csvsDir . 'placa_mae_' . slugSoquete($socket) . '.csv';
+    if (!is_file($arquivo)) return null;
+
+    $filtro = null;
+    if ($ddr !== null && in_array($ddr, ['ddr3', 'ddr4', 'ddr5'], true)) {
+        $filtro = function ($item) use ($ddr) {
+            $titulo = mb_strtolower($item['titulo']);
+            foreach (['ddr3', 'ddr4', 'ddr5'] as $outro) {
+                if ($outro !== $ddr && strpos($titulo, $outro) !== false) return false;
+            }
+            return strpos($titulo, $ddr) !== false;
+        };
+    }
+
+    $itens  = coletarProdutos([$arquivo], $filtro);
+    $melhor = $itens[0] ?? null;
+    if ($melhor === null && $filtro !== null) {
+        // Não existe placa com esse tipo de memória no soquete: usa a mais barata.
+        $itens  = coletarProdutos([$arquivo]);
+        $melhor = $itens[0] ?? null;
+    }
+    if ($melhor === null) return null;
+
+    $titulo = mb_strtolower($melhor['titulo']);
+    foreach (['ddr5', 'ddr4', 'ddr3'] as $tipo) {
+        if (strpos($titulo, $tipo) !== false) return $tipo;
+    }
+    return null;
+}
+
+function escolherRam(string $csvsDir, string $ddr, ?string $capFixa): ?string
+{
+    $padrao = $capFixa !== null
+        ? [$csvsDir . "memoria_{$ddr}_{$capFixa}.csv"]
+        : (glob($csvsDir . "memoria_{$ddr}_*.csv") ?: []);
+
+    $melhorPreco = INF;
+    $capEscolhida = null;
+    foreach ($padrao as $arquivo) {
+        if (!preg_match('/_(\d+gb)\.csv$/', basename($arquivo), $m)) continue;
+        $itens = coletarProdutos([$arquivo], 'itemEhMemoriaRam');
+        $item  = $itens[0] ?? null;
+        if ($item === null) continue;
+        if ($item['precoNum'] < $melhorPreco) {
+            $melhorPreco   = $item['precoNum'];
+            $capEscolhida = $m[1];
+        }
+    }
+    return $capEscolhida;
+}
+
+function escolherArmazenamento(string $csvsDir): ?array
+{
+    $mapa = [
+        'ssd_m.2 nvme' => ['tipo' => 'M.2 NVMe', 'cap' => ''],
+        'ssd_m.2 sata' => ['tipo' => 'M.2 SATA', 'cap' => ''],
+        'ssd_sata'     => ['tipo' => 'SSD SATA', 'cap' => ''],
+        'hdd_sata'     => ['tipo' => 'HD PC', 'cap' => ''],
+    ];
+
+    $melhorPreco = INF;
+    $escolhido   = null;
+
+    foreach (glob($csvsDir . '*.csv') ?: [] as $arquivo) {
+        $nome = basename($arquivo, '.csv');
+        $dados = null;
+        foreach ($mapa as $prefixo => $info) {
+            if (strpos($nome, $prefixo . '_') === 0) {
+                $dados = [
+                    'tipo' => $info['tipo'],
+                    'cap'  => substr($nome, strlen($prefixo) + 1),
+                ];
+                break;
+            }
+        }
+        if ($dados === null) continue;
+
+        $itens = coletarProdutos([$arquivo]);
+        $item  = $itens[0] ?? null;
+        if ($item === null) continue;
+        if ($item['precoNum'] < $melhorPreco) {
+            $melhorPreco = $item['precoNum'];
+            $escolhido   = $dados;
+        }
+    }
+    return $escolhido;
+}
+
+function escolherGpu(string $csvsDir, int $wattsMax, string $marcaFixa = ''): ?array
+{
+    if ($marcaFixa === 'nvidia') {
+        $arquivos = glob($csvsDir . 'nvidia_*.csv') ?: [];
+    } elseif ($marcaFixa === 'amd') {
+        $arquivos = glob($csvsDir . 'amd_rx_*.csv') ?: [];
+    } else {
+        $arquivos = array_merge(
+            glob($csvsDir . 'nvidia_*.csv') ?: [],
+            glob($csvsDir . 'amd_rx_*.csv') ?: []
+        );
+    }
+
+    $melhor = null;
+    foreach ($arquivos as $arquivo) {
+        $marca = str_starts_with(basename($arquivo), 'amd_') ? 'amd' : 'nvidia';
+        $itens = coletarProdutos([$arquivo], function ($item) use ($wattsMax) {
+            $titulo = mb_strtolower($item['titulo']);
+            if (strpos($titulo, 'placa') === false) return false;
+            if (preg_match('/ventoinha|fan|suporte|cooler de placa/', $titulo)) return false;
+            return estimarWattsGpu($item['titulo']) <= $wattsMax;
+        });
+        $item = $itens[0] ?? null;
+        if ($item === null) continue;
+        if ($melhor === null || $item['precoNum'] < $melhor['preco']) {
+            $melhor = [
+                'preco' => $item['precoNum'],
+                'marca' => $marca,
+                'watts' => estimarWattsGpu($item['titulo']),
+            ];
+        }
+    }
+    return $melhor;
+}
+
+function escolherFonte(string $csvsDir, int $necessaria): ?string
+{
+    $melhor      = null;
+    $maiorWatts  = 0;
+    $capMaior    = null;
+
+    foreach (glob($csvsDir . 'fonte_*.csv') ?: [] as $arquivo) {
+        if (!preg_match('/^fonte_(.+)\.csv$/', basename($arquivo), $m)) continue;
+        $watts = normalizarCapacidadeFonte($m[1]);
+        if ($watts > $maiorWatts) {
+            $maiorWatts = $watts;
+            $capMaior   = $m[1];
+        }
+        if ($watts < $necessaria) continue;
+
+        $itens = coletarProdutos([$arquivo]);
+        $item  = $itens[0] ?? null;
+        if ($item === null) continue;
+        if ($melhor === null || $item['precoNum'] < $melhor['preco']) {
+            $melhor = ['preco' => $item['precoNum'], 'cap' => $m[1]];
+        }
+    }
+
+    return $melhor['cap'] ?? $capMaior;
+}
+
+function escolherGabinete(string $csvsDir): ?string
+{
+    $melhorPreco = INF;
+    $escolhido   = null;
+
+    foreach (['mid_tower', 'full_tower'] as $tipo) {
+        $itens = coletarProdutos([$csvsDir . "gabinete_{$tipo}.csv"]);
+        $item  = $itens[0] ?? null;
+        if ($item === null) continue;
+        if ($item['precoNum'] < $melhorPreco) {
+            $melhorPreco = $item['precoNum'];
+            $escolhido   = $tipo;
+        }
+    }
+    return $escolhido;
+}
+
+function escolherCooler(string $csvsDir, string $socket): ?array
+{
+    $melhorPreco = INF;
+    $escolhido   = null;
+
+    $arquivos = array_merge(
+        glob($csvsDir . 'air_cooler_*.csv') ?: [],
+        glob($csvsDir . 'water_cooler_*.csv') ?: []
+    );
+
+    foreach ($arquivos as $arquivo) {
+        if (!preg_match('/^(air|water)_cooler_(simples|rgb|argb)\.csv$/', basename($arquivo), $m)) continue;
+
+        $itens = coletarProdutos([$arquivo], function ($item) use ($socket) {
+            $titulo  = mb_strtolower($item['titulo']);
+            $temIntel = strpos($titulo, 'intel') !== false || strpos($titulo, 'lga') !== false;
+            $temAmd   = strpos($titulo, 'amd') !== false || strpos($titulo, 'am4') !== false
+                || strpos($titulo, 'am5') !== false || strpos($titulo, 'ryzen') !== false;
+
+            if (strpos($socket, 'LGA') === 0) {
+                return !($temAmd && !$temIntel);
+            }
+            return !($temIntel && !$temAmd);
+        });
+
+        $item = $itens[0] ?? null;
+        if ($item === null) continue;
+        if ($item['precoNum'] < $melhorPreco) {
+            $melhorPreco = $item['precoNum'];
+            $escolhido   = ['tipo' => $m[1], 'estilo' => $m[2]];
+        }
+    }
+    return $escolhido;
+}
+
+/**
+ * Preenche só as peças que faltam, mantendo o que o usuário já escolheu.
+ * Sempre pega o item mais barato que combine com o restante do PC.
+ *
+ * @return array{0:array<string,string>,1:array<string,mixed>}
+ */
+function completarEntradaSetup(array $entrada, string $csvsDir, string $perfilBusca): array
+{
+    $socket = '';
+    $ddr    = ($entrada['ram_ddr'] !== '') ? $entrada['ram_ddr'] : null;
+    if ($entrada['placa_soquete'] !== '' && $entrada['placa_soquete'] !== 'todos') {
+        $socket = strtoupper($entrada['placa_soquete']);
+    }
+
+    // 1. Processador (se o usuário não escolheu nenhum).
+    if ($entrada['cpu_marca'] === '') {
+        $arquivos = array_merge(
+            glob($csvsDir . 'amd_ryzen_*.csv') ?: [],
+            glob($csvsDir . 'intel_i*.csv') ?: []
+        );
+        $melhor = null;
+
+        foreach ($arquivos as $arquivo) {
+            $dadosCpu = dadosCpuDoArquivo($arquivo);
+            if ($dadosCpu === null) continue;
+
+            $info = socketEDdrDaCpu($dadosCpu['cpu_marca'], $dadosCpu['cpu_linha'], $dadosCpu['cpu_gen']);
+            if ($socket !== '' && $info['socket'] !== $socket) continue;
+            if ($ddr === 'ddr5' && !in_array($info['socket'], ['AM5', 'LGA 1700'], true)) continue;
+            if ($ddr === 'ddr4' && $info['socket'] === 'AM5') continue;
+
+            $itens = coletarProdutos([$arquivo]);
+            $item  = $itens[0] ?? null;
+            if ($item === null) continue;
+
+            if ($melhor === null || $item['precoNum'] < $melhor['preco']) {
+                $melhor = [
+                    'preco' => $item['precoNum'],
+                    'dados' => $dadosCpu,
+                    'info'  => $info,
+                ];
+            }
+        }
+
+        if ($melhor !== null) {
+            $entrada['cpu_marca'] = $melhor['dados']['cpu_marca'];
+            $entrada['cpu_linha'] = $melhor['dados']['cpu_linha'];
+            $entrada['cpu_gen']   = $melhor['dados']['cpu_gen'];
+            $socket = $melhor['info']['socket'];
+            if ($ddr === null) $ddr = $melhor['info']['ddr'];
+        }
+    }
+
+    // 2. Soquete e placa-mãe.
+    if ($socket === '') {
+        $info = socketEDdrDaCpu($entrada['cpu_marca'], $entrada['cpu_linha'], $entrada['cpu_gen']);
+        $socket = $info['socket'];
+        if ($ddr === null) $ddr = $info['ddr'];
+    }
+    $ddrDaPlaca = escolherPlacaMae($csvsDir, $socket, $ddr);
+    if ($ddrDaPlaca !== null) {
+        $ddr = $ddrDaPlaca;
+        $entrada['ram_ddr'] = $ddrDaPlaca;
+    }
+    if ($entrada['placa_soquete'] === '' || $entrada['placa_soquete'] === 'todos') {
+        $entrada['placa_soquete'] = $socket;
+    }
+
+    // 3. Memória RAM.
+    if ($entrada['ram_tipo'] === '') $entrada['ram_tipo'] = 'desktop';
+    if ($entrada['ram_cap'] === '' && $entrada['ram_ddr'] !== '') {
+        $cap = escolherRam($csvsDir, $entrada['ram_ddr'], null);
+        if ($cap !== null) $entrada['ram_cap'] = $cap;
+    }
+
+    // 4. Armazenamento.
+    if ($entrada['disco_tipo'] === '' || $entrada['disco_cap'] === '') {
+        $disco = escolherArmazenamento($csvsDir);
+        if ($disco !== null) {
+            if ($entrada['disco_tipo'] === '') $entrada['disco_tipo'] = $disco['tipo'];
+            if ($entrada['disco_cap'] === '')  $entrada['disco_cap']  = $disco['cap'];
+        }
+    }
+
+    // 5. Placa de vídeo.
+    $maxWatts = PHP_INT_MAX;
+    if ($entrada['fonte_cap'] !== '' && $entrada['fonte_cap'] !== 'todos') {
+        $maxWatts = normalizarCapacidadeFonte($entrada['fonte_cap']);
+    }
+    $gpu = escolherGpu($csvsDir, $maxWatts, $entrada['gpu_marca']);
+    if ($gpu !== null && $entrada['gpu_marca'] === '') {
+        $entrada['gpu_marca'] = $gpu['marca'];
+    }
+    $gpuWatts = $gpu['watts'] ?? 150;
+
+    // 6. Fonte.
+    if ($entrada['fonte_cap'] === '' || $entrada['fonte_cap'] === 'todos') {
+        $necessaria = estimarWattsCpu($entrada['cpu_marca'], $entrada['cpu_linha'], $entrada['cpu_gen'])
+            + $gpuWatts + 220;
+        $fonte = escolherFonte($csvsDir, $necessaria);
+        if ($fonte !== null) $entrada['fonte_cap'] = $fonte;
+    }
+
+    // 7. Gabinete.
+    if ($entrada['gabinete_tipo'] === '' || $entrada['gabinete_tipo'] === 'todos') {
+        $gabinete = escolherGabinete($csvsDir);
+        if ($gabinete !== null) $entrada['gabinete_tipo'] = $gabinete;
+    }
+
+    // 8. Cooler.
+    if ($entrada['cooler_tipo'] === '' && $entrada['cooler_estilo'] === '') {
+        $cooler = escolherCooler($csvsDir, $socket);
+        if ($cooler !== null) {
+            $entrada['cooler_tipo']  = $cooler['tipo'];
+            $entrada['cooler_estilo'] = $cooler['estilo'];
+        }
+    }
+
+    return [
+        $entrada,
+        [
+            'socket'    => $socket,
+            'ddr'       => $ddr,
+            'watts_max' => $maxWatts === PHP_INT_MAX ? null : $maxWatts,
+        ],
+    ];
+}
+
 /**
  * Monta a lista de peças que serão cotadas a partir dos filtros já normalizados.
  *
@@ -194,7 +617,7 @@ function normalizarEntrada(array $get, bool $modoSetup, string $perfilBusca): ar
  * @param string $perfilBusca 'barato' ou 'desempenho'.
  * @return array<string, array{rotulo:string,termo:string,padroes:array,aviso?:string}>
  */
-function montarPecasParaCotar(array $entrada, string $csvsDir, bool $modoSetup, string $perfilBusca): array
+function montarPecasParaCotar(array $entrada, string $csvsDir, bool $modoSetup, string $perfilBusca, array $compatibilidade = []): array
 {
     $cpuMarca = $entrada['cpu_marca'];
     $cpuLinha = $entrada['cpu_linha'];
@@ -280,6 +703,7 @@ function montarPecasParaCotar(array $entrada, string $csvsDir, bool $modoSetup, 
             'termo'   => $termoRam,
             'padroes' => $padroesRam,
             'aviso'   => $avisoRam,
+            'filtro'  => 'itemEhMemoriaRam',
         ];
     }
 
@@ -344,7 +768,19 @@ function montarPecasParaCotar(array $entrada, string $csvsDir, bool $modoSetup, 
             $padroesGpu[] = $csvsDir . (($gpuMarca === 'nvidia') ? 'nvidia_*.csv' : 'amd_rx_*.csv');
         }
 
-        $pecasParaCotar['gpu'] = ['rotulo' => 'Placa de Vídeo', 'termo' => $termoGpu, 'padroes' => $padroesGpu];
+        $pecasParaCotar['gpu'] = [
+            'rotulo'  => 'Placa de Vídeo',
+            'termo'   => $termoGpu,
+            'padroes' => $padroesGpu,
+            'exigir'  => ['placa'],
+            'filtro'  => function ($item) {
+                $titulo = mb_strtolower($item['titulo']);
+                return !preg_match('/ventoinha|fan|suporte|cooler de placa/', $titulo);
+            },
+        ];
+        if (!empty($compatibilidade['watts_max'])) {
+            $pecasParaCotar['gpu']['watts_max'] = (int) $compatibilidade['watts_max'];
+        }
     }
 
     // 5. Fonte
@@ -388,6 +824,9 @@ function montarPecasParaCotar(array $entrada, string $csvsDir, bool $modoSetup, 
                 ? 'placa_mae_' . strtolower(str_replace(' ', '_', $soquetePlaca)) . '.csv'
                 : 'placa_mae_*.csv')],
         ];
+        if (!empty($compatibilidade['ddr'])) {
+            $pecasParaCotar['placa_mae']['exigir'] = [$compatibilidade['ddr']];
+        }
     }
 
     // 7. Gabinete
@@ -417,6 +856,20 @@ function montarPecasParaCotar(array $entrada, string $csvsDir, bool $modoSetup, 
             'termo'   => $termoCooler,
             'padroes' => $padroesCooler,
         ];
+        if (!empty($compatibilidade['socket'])) {
+            $socketInfo = $compatibilidade['socket'];
+            $pecasParaCotar['cooler']['filtro'] = function ($item) use ($socketInfo) {
+                $titulo   = mb_strtolower($item['titulo']);
+                $temIntel = strpos($titulo, 'intel') !== false || strpos($titulo, 'lga') !== false;
+                $temAmd   = strpos($titulo, 'amd') !== false || strpos($titulo, 'am4') !== false
+                    || strpos($titulo, 'am5') !== false || strpos($titulo, 'ryzen') !== false;
+
+                if (strpos($socketInfo, 'LGA') === 0) {
+                    return !($temAmd && !$temIntel);
+                }
+                return !($temIntel && !$temAmd);
+            };
+        }
     }
 
     return $pecasParaCotar;
@@ -433,10 +886,16 @@ function montarPecasParaCotar(array $entrada, string $csvsDir, bool $modoSetup, 
  *   atualizacao: int
  * }
  */
-function calcularCotacao(array $get, string $csvsDir, bool $modoSetup, string $perfilBusca): array
+function calcularCotacao(array $get, string $csvsDir, bool $modoSetup, string $perfilBusca, bool $completarSetup = false): array
 {
-    $entrada        = normalizarEntrada($get, $modoSetup, $perfilBusca);
-    $pecasParaCotar = montarPecasParaCotar($entrada, $csvsDir, $modoSetup, $perfilBusca);
+    $compatibilidade = [];
+    $entrada         = normalizarEntrada($get, $modoSetup, $perfilBusca, !$completarSetup);
+
+    if ($completarSetup && $modoSetup) {
+        [$entrada, $compatibilidade] = completarEntradaSetup($entrada, $csvsDir, $perfilBusca);
+    }
+
+    $pecasParaCotar = montarPecasParaCotar($entrada, $csvsDir, $modoSetup, $perfilBusca, $compatibilidade);
 
     $resultadosPorPeca = [];
     $totalSoma         = 0.0;
@@ -448,7 +907,20 @@ function calcularCotacao(array $get, string $csvsDir, bool $modoSetup, string $p
     }
 
     foreach ($pecasParaCotar as $chave => $dados) {
-        $itens        = coletarProdutos($dados['padroes']);
+        $itens = coletarProdutos($dados['padroes'], function ($item) use ($dados) {
+            if (!empty($dados['exigir'])) {
+                $titulo = mb_strtolower($item['titulo']);
+                foreach ($dados['exigir'] as $trecho) {
+                    if (strpos($titulo, mb_strtolower($trecho)) === false) return false;
+                }
+            }
+            if (isset($dados['filtro']) && !call_user_func($dados['filtro'], $item)) return false;
+            if (!empty($dados['watts_max']) && estimarWattsGpu($item['titulo']) > (int) $dados['watts_max']) {
+                return false;
+            }
+            return true;
+        });
+
         $melhor       = $itens[0] ?? null;
         $alternativas = array_slice($itens, 1, 3);
 
@@ -471,11 +943,12 @@ function calcularCotacao(array $get, string $csvsDir, bool $modoSetup, string $p
     }
 
     return [
-        'pecas'        => $pecasParaCotar,
-        'resultados'   => $resultadosPorPeca,
-        'total'        => $totalSoma,
-        'faltantes'    => $pecasComFalta,
-        'atualizacao'  => $ultimaAtualizacao,
-        'entrada'      => $entrada,
+        'pecas'            => $pecasParaCotar,
+        'resultados'       => $resultadosPorPeca,
+        'total'            => $totalSoma,
+        'faltantes'        => $pecasComFalta,
+        'atualizacao'      => $ultimaAtualizacao,
+        'entrada'          => $entrada,
+        'compatibilidade'  => $compatibilidade,
     ];
 }

@@ -8,10 +8,11 @@ exigirLogin();
 $raizProjeto = dirname(dirname(__DIR__));
 $csvsDir     = $raizProjeto . DIRECTORY_SEPARATOR . 'csvs' . DIRECTORY_SEPARATOR;
 
-$perfilBusca = $_GET['perfil_busca'] ?? 'barato';
-$modoSetup   = ($_GET['montar_setup'] ?? '') === '1';
+$perfilBusca    = $_GET['perfil_busca'] ?? 'barato';
+$modoSetup      = ($_GET['montar_setup'] ?? '') === '1';
+$completarSetup = ($_GET['completar_setup'] ?? '') === '1';
 
-$cotacao    = calcularCotacao($_GET, $csvsDir, $modoSetup, $perfilBusca);
+$cotacao    = calcularCotacao($_GET, $csvsDir, $modoSetup, $perfilBusca, $completarSetup);
 $resultados = $cotacao['resultados'];
 $custo      = (float) $cotacao['total'];
 $faltantes  = (int) $cotacao['faltantes'];

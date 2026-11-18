@@ -9,10 +9,11 @@ require __DIR__ . '/includes/cotacao.php';
 $raizProjeto = dirname(dirname(__DIR__));
 $csvsDir     = $raizProjeto . DIRECTORY_SEPARATOR . 'csvs' . DIRECTORY_SEPARATOR;
 
-$perfilBusca = $_GET['perfil_busca'] ?? 'barato';
-$modoSetup   = ($_GET['montar_setup'] ?? '') === '1';
+$perfilBusca    = $_GET['perfil_busca'] ?? 'barato';
+$modoSetup      = ($_GET['montar_setup'] ?? '') === '1';
+$completarSetup = ($_GET['completar_setup'] ?? '') === '1';
 
-$cotacao = calcularCotacao($_GET, $csvsDir, $modoSetup, $perfilBusca);
+$cotacao = calcularCotacao($_GET, $csvsDir, $modoSetup, $perfilBusca, $completarSetup);
 
 $pecasParaCotar    = $cotacao['pecas'];
 $resultadosPorPeca = $cotacao['resultados'];
@@ -70,13 +71,15 @@ $valorServico    = $modoSetup ? $montagemCliente : $lucroPecas;
 
 // Mantém todos os filtros atuais ao ir para o checkout
 $queryCheckout = $_GET;
-$queryCheckout['montar_setup'] = $modoSetup ? '1' : '0';
+$queryCheckout['montar_setup']   = $modoSetup ? '1' : '0';
+$queryCheckout['completar_setup'] = $completarSetup ? '1' : '0';
 $linkCheckout = 'checkout.php?' . http_build_query($queryCheckout);
 
-// Atalho no quadro do total: aponta o botão para o checkout já com montagem.
-$queryCheckoutSetup = $_GET;
-$queryCheckoutSetup['montar_setup'] = '1';
-$linkCheckoutSetup = 'checkout.php?' . http_build_query($queryCheckoutSetup);
+// Atalho no quadro do total: refaz a busca completando as peças que faltam.
+$queryCompletarSetup = $_GET;
+$queryCompletarSetup['montar_setup']   = '1';
+$queryCompletarSetup['completar_setup'] = '1';
+$linkCompletarSetup = 'index.php?' . http_build_query($queryCompletarSetup) . '#resultados';
 
 $erroTerminal = '';
 ?>
@@ -361,7 +364,7 @@ $erroTerminal = '';
                         <?php endif; ?>
                     <?php else: ?>
                         <div class="summary-title">
-                            <?= count($resultadosPorPeca) > 1 ? 'Total das peças selecionadas' : 'Oferta mais barata encontrada' ?>
+                            Total das peças selecionadas
                         </div>
                         <div class="summary-subtitle">
                             <?php if ($modoSetup): ?>
@@ -383,7 +386,7 @@ $erroTerminal = '';
                         <span class="summary-price-label">Total</span>
                         <?= formatarPreco($totalCliente) ?>
                         <?php if (!$modoSetup): ?>
-                            <a class="summary-setup-link" href="<?= e($linkCheckoutSetup) ?>">Quer que montemos seu PC? Clique aqui</a>
+                            <a class="summary-setup-link" href="<?= e($linkCompletarSetup) ?>">Quer que montemos seu PC? Clique aqui</a>
                         <?php endif; ?>
                         <?php if ($acaoCheckoutHtml !== ''): ?>
                             <div class="summary-action"><?= $acaoCheckoutHtml ?></div>
@@ -456,6 +459,7 @@ $erroTerminal = '';
                             <div class="cliente-peca">
                                 <span class="cliente-peca-check">✓</span>
                                 <span><?= htmlspecialchars($item['titulo']) ?></span>
+                                <span class="cliente-peca-preco"><?= formatarPreco(precoPecaCliente((float) $item['precoNum'])) ?></span>
                             </div>
                         <?php else: ?>
                             <div class="sem-oferta">
