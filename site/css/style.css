@@ -231,6 +231,7 @@ select:focus {
     display: flex;
     justify-content: space-between;
     align-items: center;
+    position: relative;
 }
 
 .summary-title {
@@ -301,6 +302,16 @@ select:focus {
     color: var(--accent-green);
 }
 
+.admin-peca-venda {
+    margin-top: 0.3rem;
+    font-size: 0.82rem;
+    color: var(--text-muted);
+}
+
+.admin-peca-venda strong {
+    color: var(--accent-green);
+}
+
 .loja-badge {
     display: inline-flex;
     align-items: center;
@@ -346,6 +357,57 @@ select:focus {
 
 .alternativas summary:hover {
     color: var(--primary);
+}
+
+/* --- Detalhe do lucro peça a peça --- */
+.lucro-detalhes {
+    margin: 0.15rem 0;
+}
+
+.lucro-detalhes summary {
+    cursor: pointer;
+    list-style: none;
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    gap: 1rem;
+    padding: 0.25rem 0;
+    font-size: 0.9rem;
+    user-select: none;
+}
+
+.lucro-detalhes summary::-webkit-details-marker {
+    display: none;
+}
+
+.lucro-detalhes summary:hover {
+    color: var(--primary);
+}
+
+.lucro-detalhes .seta {
+    display: inline-block;
+    margin-left: 0.4rem;
+    color: var(--primary);
+    transition: transform 0.15s;
+}
+
+.lucro-detalhes[open] .seta {
+    transform: rotate(180deg);
+}
+
+.lucro-linha {
+    display: flex;
+    justify-content: space-between;
+    align-items: baseline;
+    gap: 1rem;
+    padding: 0.35rem 0 0.35rem 0.75rem;
+    border-left: 2px solid rgba(56, 189, 248, 0.45);
+    font-size: 0.82rem;
+    color: var(--text-muted);
+}
+
+.lucro-linha strong {
+    color: var(--text-main);
 }
 
 .alternativa {
@@ -565,6 +627,10 @@ select:focus {
         flex-direction: column;
         align-items: flex-start;
         gap: 1rem;
+    }
+
+    .summary-price {
+        align-self: flex-end;
     }
 
     .product-card,
@@ -814,6 +880,27 @@ select:focus {
     box-shadow: 0 0 0 3px rgba(56, 189, 248, 0.12);
 }
 
+.campo input[readonly] {
+    background: rgba(148, 163, 184, 0.08);
+    color: var(--text-muted);
+    cursor: not-allowed;
+}
+
+.cep-status {
+    display: block;
+    margin-top: 0.3rem;
+    font-size: 0.75rem;
+    color: var(--text-muted);
+}
+
+.cep-status-ok {
+    color: var(--accent-green);
+}
+
+.cep-status-erro {
+    color: #fca5a5;
+}
+
 .campo textarea {
     resize: vertical;
 }
@@ -909,6 +996,19 @@ select:focus {
     flex: 1;
 }
 
+.summary-admin {
+    align-items: flex-start;
+    padding-bottom: 4.75rem;
+}
+
+.summary-action-admin {
+    position: absolute;
+    right: 2rem;
+    bottom: 1.5rem;
+    width: auto;
+    margin-top: 0;
+}
+
 .summary-cliente {
     margin-top: 0.6rem;
     font-size: 0.86rem;
@@ -923,6 +1023,7 @@ select:focus {
     display: flex;
     flex-direction: column;
     align-items: flex-end;
+    align-self: flex-end;
     gap: 0.1rem;
     text-align: right;
 }
@@ -933,6 +1034,30 @@ select:focus {
     letter-spacing: 0.1em;
     color: var(--text-muted);
     font-weight: 700;
+}
+
+.summary-action {
+    margin-top: 0.9rem;
+    width: 100%;
+    display: flex;
+    justify-content: flex-end;
+    text-align: right;
+}
+
+.summary-action .btn-comprar {
+    margin-left: auto;
+}
+
+.summary-setup-link {
+    margin-top: 0.45rem;
+    font-size: 0.9rem;
+    font-weight: 700;
+    color: var(--primary);
+    text-decoration: none;
+}
+
+.summary-setup-link:hover {
+    text-decoration: underline;
 }
 
 .resumo-linhas {
@@ -1376,7 +1501,8 @@ select:focus {
     }
 
     .summary-price {
-        align-items: flex-start;
+        align-items: flex-end;
+        align-self: flex-end;
     }
 
     .conta-topo {

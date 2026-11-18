@@ -37,28 +37,91 @@ $assuntoContato  = 'Contato pelo site ' . $nomeSistema;
 // Preços para o cliente final
 // ---------------------------------------------------------------------------
 // O admin vê o custo real das peças. O cliente vê o custo + os valores abaixo.
-// Ajuste livremente:
+// Estes valores podem ser alterados no painel administrativo (admin.php) e
+// ficam salvos em dados/precos.json, compartilhados entre os administradores.
+//   margem_peca_pct -> % de lucro em cima do custo de cada peça
+//   lucro_min_peca  -> lucro mínimo em reais por peça (0 = sem mínimo)
+//   lucro_max_peca  -> lucro máximo em reais por peça (0 = sem máximo)
 //   montagem_pc     -> valor fixo cobrado para montar/testar/embalar o PC
-//   margem_peca_pct -> % de margem em cima das peças vendidas avulsas (0 = sem lucro)
 //   frete_pc        -> frete estimado do PC montado (0 = "a combinar")
 $configPrecos = [
+    'margem_peca_pct' => 20.0,
+    'lucro_min_peca'  => 10.00,
+    'lucro_max_peca'  => 150.00,
     'montagem_pc'     => 150.00,
-    'margem_peca_pct' => 5.0,
     'frete_pc'        => 0.00,
 ];
+
+// Carrega os preços salvos pelo painel admin, se existirem.
+$arquivoPrecos = __DIR__ . '/../dados/precos.json';
+if (is_file($arquivoPrecos)) {
+    $precosSalvos = json_decode((string) @file_get_contents($arquivoPrecos), true);
+    if (is_array($precosSalvos)) {
+        foreach (['margem_peca_pct', 'lucro_min_peca', 'lucro_max_peca', 'montagem_pc', 'frete_pc'] as $chavePreco) {
+            if (isset($precosSalvos[$chavePreco]) && is_numeric($precosSalvos[$chavePreco])) {
+                $configPrecos[$chavePreco] = (float) $precosSalvos[$chavePreco];
+            }
+        }
+    }
+}
+
+/** Lucro em reais sobre o custo de uma peça, respeitando piso e teto. */
+function lucroPecasCliente(float $custo): float
+{
+    global $configPrecos;
+
+    $lucro = $custo * (float) $configPrecos['margem_peca_pct'] / 100;
+    $minimo = (float) ($configPrecos['lucro_min_peca'] ?? 0);
+    $maximo = (float) ($configPrecos['lucro_max_peca'] ?? 0);
+
+    if ($minimo > 0) $lucro = max($lucro, $minimo);
+    if ($maximo > 0) $lucro = min($lucro, $maximo);
+
+    return round($lucro, 2);
+}
+
+/** Preço de venda das peças (custo + lucro por peça). */
+function precoPecasComLucro(float $custo): float
+{
+    return round($custo + lucroPecasCliente($custo), 2);
+}
 
 /** Preço de venda de peça(s) avulsa(s). */
 function precoPecaCliente(float $custo): float
 {
-    global $configPrecos;
-    return round($custo * (1 + $configPrecos['margem_peca_pct'] / 100), 2);
+    return precoPecasComLucro($custo);
 }
 
-/** Preço de venda de um PC completo (peças + montagem + frete). */
+/** Preço de venda de um PC completo (peças + lucro + montagem + frete). */
 function precoPcCliente(float $custo): float
 {
     global $configPrecos;
-    return round($custo + $configPrecos['montagem_pc'] + $configPrecos['frete_pc'], 2);
+    return round(
+        precoPecasComLucro($custo)
+        + (float) $configPrecos['montagem_pc']
+        + (float) $configPrecos['frete_pc'],
+        2
+    );
+}
+
+/** Salva os preços no arquivo usado pelo painel admin. */
+function salvarConfigPrecos(array $dados): bool
+{
+    $arquivo = __DIR__ . '/../dados/precos.json';
+    $pasta = dirname($arquivo);
+    if (!is_dir($pasta)) {
+        @mkdir($pasta, 0775, true);
+    }
+
+    $json = json_encode([
+        'margem_peca_pct' => round((float) $dados['margem_peca_pct'], 2),
+        'lucro_min_peca'  => round((float) $dados['lucro_min_peca'], 2),
+        'lucro_max_peca'  => round((float) $dados['lucro_max_peca'], 2),
+        'montagem_pc'     => round((float) $dados['montagem_pc'], 2),
+        'frete_pc'        => round((float) $dados['frete_pc'], 2),
+    ], JSON_PRETTY_PRINT | JSON_UNESCAPED_UNICODE);
+
+    return $json !== false && @file_put_contents($arquivo, $json, LOCK_EX) !== false;
 }
 
 function formatarPreco(float $valor): string

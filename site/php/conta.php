@@ -28,6 +28,8 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
                 $erroDados = 'Informe seu nome.';
             } elseif (!filter_var($email, FILTER_VALIDATE_EMAIL)) {
                 $erroDados = 'Informe um e-mail válido.';
+            } elseif (preg_match('/^\d{5}-?\d{3}$/', trim((string) ($_POST['cep'] ?? ''))) !== 1) {
+                $erroDados = 'Informe um CEP válido.';
             } else {
                 $outro = buscarUsuarioPorEmail($email);
                 if ($outro && (int) $outro['id'] !== (int) $usuario['id']) {
@@ -136,7 +138,7 @@ renderHead('Minha conta');
                     </label>
                     <label class="campo">
                         <span>CEP</span>
-                        <input type="text" name="cep" value="<?= e($form['cep']) ?>" inputmode="numeric">
+                        <input type="text" name="cep" value="<?= e($form['cep']) ?>" inputmode="numeric" data-cep>
                     </label>
                     <label class="campo campo-largo">
                         <span>Endereço</span>

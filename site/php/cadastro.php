@@ -34,6 +34,9 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
         if ($erro === '' && !filter_var($email, FILTER_VALIDATE_EMAIL)) {
             $erro = 'Informe um e-mail válido.';
         }
+        if ($erro === '' && preg_match('/^\d{5}-?\d{3}$/', trim((string) ($_POST['cep'] ?? ''))) !== 1) {
+            $erro = 'Informe um CEP válido.';
+        }
         if ($erro === '' && mb_strlen($senha) < 6) {
             $erro = 'A senha deve ter pelo menos 6 caracteres.';
         }
@@ -124,7 +127,7 @@ renderHead('Criar conta');
             <div class="form-grid">
                 <label class="campo">
                     <span>CEP *</span>
-                    <input type="text" name="cep" value="<?= $valor('cep') ?>" placeholder="00000-000" inputmode="numeric" autocomplete="postal-code" required>
+                    <input type="text" name="cep" value="<?= $valor('cep') ?>" placeholder="00000-000" inputmode="numeric" autocomplete="postal-code" data-cep required>
                 </label>
                 <label class="campo campo-largo">
                     <span>Endereço *</span>

@@ -6,6 +6,8 @@ exigirAdmin();
 
 $erroEndereco = '';
 $dadosEndereco = null;
+$erroPrecos = '';
+$dadosPrecos = null;
 
 if ($_SERVER['REQUEST_METHOD'] === 'POST' && ($_POST['acao'] ?? '') === 'endereco') {
     if (!csrfValido($_POST['csrf'] ?? null)) {
@@ -41,9 +43,37 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' && ($_POST['acao'] ?? '') === 'enderec
     }
 }
 
+if ($_SERVER['REQUEST_METHOD'] === 'POST' && ($_POST['acao'] ?? '') === 'precos') {
+    if (!csrfValido($_POST['csrf'] ?? null)) {
+        $erroPrecos = 'Sessão expirada. Tente novamente.';
+    } else {
+        $dadosPrecos = [];
+        foreach (['margem_peca_pct', 'lucro_min_peca', 'lucro_max_peca', 'montagem_pc', 'frete_pc'] as $campoPreco) {
+            $valor = str_replace(',', '.', trim((string) ($_POST[$campoPreco] ?? '')));
+            if ($valor === '' || !is_numeric($valor) || (float) $valor < 0) {
+                $erroPrecos = 'Informe valores numéricos maiores ou iguais a zero.';
+                break;
+            }
+            $dadosPrecos[$campoPreco] = (float) $valor;
+        }
+
+        if ($erroPrecos === '') {
+            if (salvarConfigPrecos($dadosPrecos)) {
+                flash('sucesso', 'Preços e lucro atualizados.');
+                redirecionar('admin.php');
+            } else {
+                $erroPrecos = 'Não foi possível salvar. Verifique a permissão da pasta dados.';
+            }
+        }
+    }
+}
+
 $enderecoMontagem = obterEnderecoMontagem();
 if (is_array($dadosEndereco) && $erroEndereco !== '') {
     $enderecoMontagem = $dadosEndereco;
+}
+if (is_array($dadosPrecos) && $erroPrecos !== '') {
+    $configPrecos = array_merge($configPrecos, $dadosPrecos);
 }
 
 $statusValidos = ['aguardando', 'pago', 'comprando', 'montando', 'enviado', 'entregue', 'cancelado'];
@@ -109,67 +139,57 @@ renderHead('Painel administrativo');
         </div>
     </div>
 
-    <section class="card-painel">
-        <div class="painel-cabecalho">
-            <h2>Pedidos</h2>
-            <form method="get" class="form-inline">
-                <select name="status" onchange="this.form.submit()">
-                    <option value="">Todos os status</option>
-                    <?php foreach ($statusValidos as $s): ?>
-                        <option value="<?= e($s) ?>" <?= $filtro === $s ? 'selected' : '' ?>><?= e(statusPedidoLabel($s)) ?></option>
-                    <?php endforeach; ?>
-                </select>
-            </form>
-        </div>
-
-        <?php if (empty($pedidos)): ?>
-            <p class="card-sub">Nenhum pedido encontrado.</p>
-        <?php else: ?>
-            <div class="tabela-wrap">
-                <table class="tabela">
-                    <thead>
-                        <tr>
-                            <th>#</th>
-                            <th>Cliente</th>
-                            <th>Tipo</th>
-                            <th>Total</th>
-                            <th>Lucro</th>
-                            <th>Status</th>
-                            <th>Data</th>
-                            <th></th>
-                        </tr>
-                    </thead>
-                    <tbody>
-                        <?php foreach ($pedidos as $p): ?>
-                            <tr>
-                                <td>#<?= (int) $p['id'] ?></td>
-                                <td>
-                                    <?= e($p['cliente_nome']) ?><br>
-                                    <small><?= e($p['cliente_email']) ?></small>
-                                </td>
-                                <td><?= $p['tipo'] === 'pc_completo' ? 'PC montado' : 'Peças' ?></td>
-                                <td><?= formatarPreco((float) $p['total']) ?></td>
-                                <td><?= formatarPreco((float) $p['lucro']) ?></td>
-                                <td><span class="status status-<?= e($p['status']) ?>"><?= e(statusPedidoLabel($p['status'])) ?></span></td>
-                                <td><?= date('d/m/Y H:i', strtotime($p['criado_em'])) ?></td>
-                                <td><a href="pedido.php?id=<?= (int) $p['id'] ?>">Abrir</a></td>
-                            </tr>
-                        <?php endforeach; ?>
-                    </tbody>
-                </table>
-            </div>
-        <?php endif; ?>
-    </section>
-
     <div class="cards-duplos">
         <section class="card-painel">
-            <h2>Preços configurados</h2>
-            <p class="card-sub">Edite em <code>includes/config.php</code>.</p>
-            <div class="resumo-linhas">
-                <div class="resumo-linha"><span>Montagem de PC completo</span><span><?= formatarPreco((float) $configPrecos['montagem_pc']) ?></span></div>
-                <div class="resumo-linha"><span>Margem em peças avulsas</span><span><?= number_format((float) $configPrecos['margem_peca_pct'], 2, ',', '.') ?>%</span></div>
-                <div class="resumo-linha"><span>Frete do PC montado</span><span><?= (float) $configPrecos['frete_pc'] > 0 ? formatarPreco((float) $configPrecos['frete_pc']) : 'A combinar' ?></span></div>
-            </div>
+            <h2>Preços e lucro</h2>
+            <p class="card-sub">O lucro por peça é uma porcentagem sobre o custo de cada componente. No PC completo, ele é somado à montagem.</p>
+
+            <?php if ($erroPrecos !== ''): ?>
+                <div class="alerta alerta-erro"><?= e($erroPrecos) ?></div>
+            <?php endif; ?>
+
+            <form method="post" class="form-padrao">
+                <input type="hidden" name="csrf" value="<?= e(csrfToken()) ?>">
+                <input type="hidden" name="acao" value="precos">
+
+                <div class="form-grid">
+                    <label class="campo">
+                        <span>Lucro por peça (%)</span>
+                        <input type="number" name="margem_peca_pct" min="0" step="0.01" value="<?= e(number_format((float) $configPrecos['margem_peca_pct'], 2, '.', '')) ?>" required>
+                    </label>
+                    <label class="campo">
+                        <span>Lucro mínimo por peça (R$)</span>
+                        <input type="number" name="lucro_min_peca" min="0" step="0.01" value="<?= e(number_format((float) $configPrecos['lucro_min_peca'], 2, '.', '')) ?>" required>
+                    </label>
+                    <label class="campo">
+                        <span>Lucro máximo por peça (R$)</span>
+                        <input type="number" name="lucro_max_peca" min="0" step="0.01" value="<?= e(number_format((float) $configPrecos['lucro_max_peca'], 2, '.', '')) ?>" required>
+                    </label>
+                    <label class="campo">
+                        <span>Montagem do PC (R$)</span>
+                        <input type="number" name="montagem_pc" min="0" step="0.01" value="<?= e(number_format((float) $configPrecos['montagem_pc'], 2, '.', '')) ?>" required>
+                    </label>
+                    <label class="campo">
+                        <span>Frete do PC (R$)</span>
+                        <input type="number" name="frete_pc" min="0" step="0.01" value="<?= e(number_format((float) $configPrecos['frete_pc'], 2, '.', '')) ?>" required>
+                    </label>
+                </div>
+
+                <?php
+                $exemploLucro = lucroPecasCliente(100.0);
+                $exemploVenda = precoPecaCliente(100.0);
+                $exemploCaroLucro = lucroPecasCliente(2686.0);
+                $exemploCaroVenda = precoPecaCliente(2686.0);
+                ?>
+                <p class="card-sub">
+                    Exemplo: peça de R$ 100,00 → lucro de R$ <?= number_format($exemploLucro, 2, ',', '.') ?>
+                    → venda de R$ <?= number_format($exemploVenda, 2, ',', '.') ?>.<br>
+                    Peça de R$ 2.686,00 → lucro de R$ <?= number_format($exemploCaroLucro, 2, ',', '.') ?>
+                    → venda de R$ <?= number_format($exemploCaroVenda, 2, ',', '.') ?>.
+                </p>
+
+                <button type="submit" class="btn-primario">Salvar preços</button>
+            </form>
         </section>
 
         <section class="card-painel card-interno">
@@ -229,5 +249,58 @@ renderHead('Painel administrativo');
             </form>
         </section>
     </div>
+
+    <section class="card-painel">
+        <div class="painel-cabecalho">
+            <h2>Pedidos</h2>
+            <form method="get" class="form-inline">
+                <select name="status" onchange="this.form.submit()">
+                    <option value="">Todos os status</option>
+                    <?php foreach ($statusValidos as $s): ?>
+                        <option value="<?= e($s) ?>" <?= $filtro === $s ? 'selected' : '' ?>><?= e(statusPedidoLabel($s)) ?></option>
+                    <?php endforeach; ?>
+                </select>
+            </form>
+        </div>
+
+        <?php if (empty($pedidos)): ?>
+            <p class="card-sub">Nenhum pedido encontrado.</p>
+        <?php else: ?>
+            <div class="tabela-wrap">
+                <table class="tabela">
+                    <thead>
+                        <tr>
+                            <th>#</th>
+                            <th>Cliente</th>
+                            <th>Tipo</th>
+                            <th>Total</th>
+                            <th>Lucro</th>
+                            <th>Status</th>
+                            <th>Data</th>
+                            <th></th>
+                        </tr>
+                    </thead>
+                    <tbody>
+                        <?php foreach ($pedidos as $p): ?>
+                            <tr>
+                                <td>#<?= (int) $p['id'] ?></td>
+                                <td>
+                                    <?= e($p['cliente_nome']) ?><br>
+                                    <small><?= e($p['cliente_email']) ?></small>
+                                </td>
+                                <td><?= $p['tipo'] === 'pc_completo' ? 'PC montado' : 'Peças' ?></td>
+                                <td><?= formatarPreco((float) $p['total']) ?></td>
+                                <td><?= formatarPreco((float) $p['lucro']) ?></td>
+                                <td><span class="status status-<?= e($p['status']) ?>"><?= e(statusPedidoLabel($p['status'])) ?></span></td>
+                                <td><?= date('d/m/Y H:i', strtotime($p['criado_em'])) ?></td>
+                                <td><a href="pedido.php?id=<?= (int) $p['id'] ?>">Abrir</a></td>
+                            </tr>
+                        <?php endforeach; ?>
+                    </tbody>
+                </table>
+            </div>
+        <?php endif; ?>
+    </section>
+
 </main>
 <?php renderFooter(); ?>

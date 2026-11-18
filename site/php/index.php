@@ -44,15 +44,39 @@ $ehAdmin       = ehAdmin();
 $temResultado  = $totalSoma > 0 && !empty($resultadosPorPeca);
 $podeFinalizar = $temResultado && $pecasComFalta === 0;
 
-// Preço mostrado ao cliente final x custo interno (admin)
-$totalCliente  = $modoSetup ? precoPcCliente($totalSoma) : precoPecaCliente($totalSoma);
-$valorServico  = $modoSetup ? (float) $configPrecos['montagem_pc'] : max(0, $totalCliente - $totalSoma);
-$freteCliente  = $modoSetup ? (float) $configPrecos['frete_pc'] : 0.0;
+// Preço mostrado ao cliente final x custo interno (admin).
+// A regra de lucro é aplicada PEÇA A PEÇA e depois somada — nunca no total.
+$lucroPecas      = 0.0;
+$detalhesLucro   = [];
+foreach ($resultadosPorPeca as $dadosPeca) {
+    if (($dadosPeca['melhor'] ?? null) === null) continue;
+    $itemPeca  = $dadosPeca['melhor'];
+    $custoPeca = (float) $itemPeca['precoNum'];
+    $lucroPeca = lucroPecasCliente($custoPeca);
+    $lucroPecas += $lucroPeca;
+    $detalhesLucro[] = [
+        'rotulo' => $dadosPeca['rotulo'],
+        'custo'  => $custoPeca,
+        'lucro'  => $lucroPeca,
+        'venda'  => round($custoPeca + $lucroPeca, 2),
+    ];
+}
+$lucroPecas      = round($lucroPecas, 2);
+$totalPecasLucro = round($totalSoma + $lucroPecas, 2);
+$montagemCliente = $modoSetup ? (float) $configPrecos['montagem_pc'] : 0.0;
+$freteCliente    = $modoSetup ? (float) $configPrecos['frete_pc'] : 0.0;
+$totalCliente    = round($totalPecasLucro + $montagemCliente + $freteCliente, 2);
+$valorServico    = $modoSetup ? $montagemCliente : $lucroPecas;
 
 // Mantém todos os filtros atuais ao ir para o checkout
 $queryCheckout = $_GET;
 $queryCheckout['montar_setup'] = $modoSetup ? '1' : '0';
 $linkCheckout = 'checkout.php?' . http_build_query($queryCheckout);
+
+// Atalho no quadro do total: aponta o botão para o checkout já com montagem.
+$queryCheckoutSetup = $_GET;
+$queryCheckoutSetup['montar_setup'] = '1';
+$linkCheckoutSetup = 'checkout.php?' . http_build_query($queryCheckoutSetup);
 
 $erroTerminal = '';
 ?>
@@ -282,11 +306,24 @@ $erroTerminal = '';
             <pre style="background:#1e1e2e; color:#f38ba8; padding:1.2rem; border-radius:8px; border:1px solid #f38ba8; overflow-x:auto; font-size:0.85rem;"><?= htmlspecialchars($erroTerminal) ?></pre>
         <?php endif; ?>
 
+        <?php
+        $acaoCheckoutHtml = '';
+        if ($temResultado) {
+            if ($podeFinalizar) {
+                $acaoCheckoutHtml = '<a class="btn-primario btn-comprar" href="' . e($linkCheckout) . '">'
+                    . ($modoSetup ? 'Solicitar montagem' : 'Comprar peças') . '</a>';
+            } else {
+                $acaoCheckoutHtml = '<span class="checkout-nota checkout-nota-alerta">Ajuste os componentes sem oferta para finalizar.</span>';
+            }
+        }
+
+        ?>
+
         <?php if ($totalSoma > 0): ?>
             <div class="summary-banner <?= $ehAdmin ? 'summary-admin' : 'summary-cliente' ?>">
                 <div class="summary-texto">
                     <?php if ($ehAdmin): ?>
-                        <div class="summary-title">Visão administrativa — custo das peças</div>
+                        <div class="summary-title">Resumo do orçamento - Visão administrativa</div>
                         <div class="summary-subtitle">
                             <?= $pecasComFalta > 0
                                 ? "Soma parcial: {$pecasComFalta} peça(s) sem oferta nos dados coletados."
@@ -295,69 +332,66 @@ $erroTerminal = '';
                                 · Dados de <?= date('d/m/Y H:i', $ultimaAtualizacao) ?>
                             <?php endif; ?>
                         </div>
-                        <div class="summary-cliente">
-                            Preço para o cliente: <strong><?= formatarPreco($totalCliente) ?></strong>
-                            (<?= $modoSetup ? 'PC completo montado' : 'peças avulsas' ?>)
-                        </div>
-                    <?php elseif ($modoSetup): ?>
-                        <div class="summary-title">Seu PC completo montado</div>
-                        <div class="summary-subtitle">Recebemos as peças, montamos, testamos, embalamos e enviamos até você.</div>
                         <div class="resumo-linhas">
-                            <div class="resumo-linha"><span>Peças</span><span><?= formatarPreco($totalSoma) ?></span></div>
-                            <div class="resumo-linha"><span>Montagem, testes e embalagem</span><span><?= formatarPreco($valorServico) ?></span></div>
-                            <div class="resumo-linha">
-                                <span>Frete</span>
-                                <span><?= $freteCliente > 0 ? formatarPreco($freteCliente) : 'A combinar' ?></span>
-                            </div>
-                            <?php if ($pecasComFalta > 0): ?>
-                                <div class="resumo-aviso">⚠ <?= $pecasComFalta ?> componente(s) sem oferta nos dados atuais. Fale com a gente para ajustar a configuração.</div>
+                            <div class="resumo-linha"><span>Custo total das peças</span><span><?= formatarPreco($totalSoma) ?></span></div>
+                            <details class="lucro-detalhes">
+                                <summary>
+                                    <span>Lucro das peças <span class="seta">▾</span></span>
+                                    <span><?= formatarPreco($lucroPecas) ?></span>
+                                </summary>
+                                <?php foreach ($detalhesLucro as $det): ?>
+                                    <div class="lucro-linha">
+                                        <strong><?= e($det['rotulo']) ?></strong>
+                                        <span>
+                                            custo <?= formatarPreco($det['custo']) ?>
+                                            · lucro <?= formatarPreco($det['lucro']) ?>
+                                            · venda <?= formatarPreco($det['venda']) ?>
+                                        </span>
+                                    </div>
+                                <?php endforeach; ?>
+                            </details>
+                            <div class="resumo-linha"><span>Peças com lucro</span><span><?= formatarPreco($totalPecasLucro) ?></span></div>
+                            <?php if ($modoSetup): ?>
+                                <div class="resumo-linha"><span>Montagem, testes e embalagem</span><span><?= formatarPreco($montagemCliente) ?></span></div>
                             <?php endif; ?>
+                            <div class="resumo-linha resumo-total"><span>Total a cobrar</span><strong><?= formatarPreco($totalCliente) ?></strong></div>
                         </div>
+                        <?php if ($acaoCheckoutHtml !== ''): ?>
+                            <div class="summary-action summary-action-admin"><?= $acaoCheckoutHtml ?></div>
+                        <?php endif; ?>
                     <?php else: ?>
                         <div class="summary-title">
                             <?= count($resultadosPorPeca) > 1 ? 'Total das peças selecionadas' : 'Oferta mais barata encontrada' ?>
                         </div>
                         <div class="summary-subtitle">
-                            Valor final para compra das peças avulsas.
+                            <?php if ($modoSetup): ?>
+                                Peças + montagem
+                            <?php else: ?>
+                                Peças
+                            <?php endif; ?>
                             <?php if ($pecasComFalta > 0): ?>
                                 · <?= $pecasComFalta ?> peça(s) sem oferta.
                             <?php endif; ?>
-                            <?php if ($ultimaAtualizacao > 0): ?>
-                                · Dados de <?= date('d/m/Y H:i', $ultimaAtualizacao) ?>
-                            <?php endif; ?>
                         </div>
+                        <?php if ($modoSetup && $pecasComFalta > 0): ?>
+                            <div class="resumo-aviso">⚠ <?= $pecasComFalta ?> componente(s) sem oferta nos dados atuais. Fale com a gente para ajustar a configuração.</div>
+                        <?php endif; ?>
                     <?php endif; ?>
                 </div>
-                <div class="summary-price">
-                    <span class="summary-price-label"><?= $ehAdmin ? 'Custo' : 'Total' ?></span>
-                    <?= formatarPreco($ehAdmin ? $totalSoma : $totalCliente) ?>
-                </div>
-            </div>
-
-            <?php if ($temResultado): ?>
-                <div class="checkout-bar">
-                    <div class="checkout-info">
-                        <strong><?= $modoSetup ? 'PC completo montado' : 'Peças selecionadas' ?></strong>
-                        <span>
-                            <?= $modoSetup
-                                ? 'As peças chegam até nós, montamos, testamos, embalamos e enviamos para o endereço informado.'
-                                : 'Compra das peças avulsas selecionadas.' ?>
-                        </span>
-                        <?php if ($ehAdmin): ?>
-                            <span class="checkout-nota">Visão admin: o cliente veria <?= formatarPreco($totalCliente) ?>.</span>
+                <?php if (!$ehAdmin): ?>
+                    <div class="summary-price">
+                        <span class="summary-price-label">Total</span>
+                        <?= formatarPreco($totalCliente) ?>
+                        <?php if (!$modoSetup): ?>
+                            <a class="summary-setup-link" href="<?= e($linkCheckoutSetup) ?>">Quer que montemos seu PC? Clique aqui</a>
+                        <?php endif; ?>
+                        <?php if ($acaoCheckoutHtml !== ''): ?>
+                            <div class="summary-action"><?= $acaoCheckoutHtml ?></div>
                         <?php endif; ?>
                     </div>
-                    <?php if ($podeFinalizar): ?>
-                        <a class="btn-primario btn-comprar" href="<?= e($linkCheckout) ?>">
-                            <?= $modoSetup ? 'Solicitar montagem' : 'Comprar peças' ?>
-                        </a>
-                    <?php else: ?>
-                        <span class="checkout-nota checkout-nota-alerta">
-                            Ajuste os componentes sem oferta para finalizar.
-                        </span>
-                    <?php endif; ?>
-                </div>
-            <?php endif; ?>
+                <?php endif; ?>
+            </div>
+
         <?php endif; ?>
 
         <?php if (!empty($resultadosPorPeca)): ?>
@@ -372,10 +406,20 @@ $erroTerminal = '';
 
                     <?php if ($ehAdmin): ?>
                         <?php if ($dados['melhor'] !== null): $item = $dados['melhor']; ?>
+                            <?php
+                            $precoCustoItem = (float) $item['precoNum'];
+                            $lucroItem      = lucroPecasCliente($precoCustoItem);
+                            $precoVendaItem = precoPecaCliente($precoCustoItem);
+                            $margemEfetivaItem = $precoCustoItem > 0 ? ($lucroItem / $precoCustoItem) * 100 : 0;
+                            ?>
                             <a href="<?= htmlspecialchars($item['link']) ?>" target="_blank" rel="noopener" class="product-card destaque-menor">
                                 <div class="product-info">
                                     <div class="product-title"><?= htmlspecialchars($item['titulo']) ?></div>
-                                    <div class="product-price"><?= htmlspecialchars($item['precoTexto']) ?></div>
+                                    <div class="product-price">Custo: <?= htmlspecialchars($item['precoTexto']) ?></div>
+                                    <div class="admin-peca-venda">
+                                        Venda: <strong><?= formatarPreco($precoVendaItem) ?></strong>
+                                        <span>· lucro <?= formatarPreco($lucroItem) ?> (<?= number_format($margemEfetivaItem, 2, ',', '.') ?>%)</span>
+                                    </div>
                                 </div>
                                 <div class="loja-badge <?= $item['loja']['tag_class'] ?>">
                                     <span><?= $item['loja']['icone'] ?></span>
@@ -408,10 +452,10 @@ $erroTerminal = '';
                             </div>
                         <?php endif; ?>
                     <?php else: ?>
-                        <?php if ($dados['melhor'] !== null): ?>
+                        <?php if ($dados['melhor'] !== null): $item = $dados['melhor']; ?>
                             <div class="cliente-peca">
                                 <span class="cliente-peca-check">✓</span>
-                                <span><?= htmlspecialchars($dados['rotulo']) ?> selecionado para o seu setup.</span>
+                                <span><?= htmlspecialchars($item['titulo']) ?></span>
                             </div>
                         <?php else: ?>
                             <div class="sem-oferta">

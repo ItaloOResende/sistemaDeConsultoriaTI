@@ -7,5 +7,6 @@ csvs/*.csv
 # Banco de dados local (criado automaticamente no primeiro acesso)
 site/php/dados/*.sqlite
 site/php/dados/*.sqlite-*
+site/php/dados/*.json
 
 asyncTest.py

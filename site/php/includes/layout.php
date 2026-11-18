@@ -36,6 +36,7 @@ function renderFooter(): void
 
     require __DIR__ . '/footer.php';
     ?>
+    <script src="../js/formularios.js"></script>
     <script>
     // Best-effort: o link abre em nova guia e tentamos devolver o foco para esta.
     // Quem decide é o navegador; em alguns ele ignora essa chamada.

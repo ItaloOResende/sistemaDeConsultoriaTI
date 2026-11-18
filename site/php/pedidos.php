@@ -35,7 +35,6 @@ renderHead('Meus pedidos');
                     <thead>
                         <tr>
                             <th>#</th>
-                            <th>Data</th>
                             <th>Tipo</th>
                             <th>Status</th>
                             <th>Total</th>
@@ -46,7 +45,6 @@ renderHead('Meus pedidos');
                         <?php foreach ($pedidos as $p): ?>
                             <tr>
                                 <td>#<?= (int) $p['id'] ?></td>
-                                <td><?= date('d/m/Y H:i', strtotime($p['criado_em'])) ?></td>
                                 <td><?= $p['tipo'] === 'pc_completo' ? 'PC montado' : 'Peças avulsas' ?></td>
                                 <td><span class="status status-<?= e($p['status']) ?>"><?= e(statusPedidoLabel($p['status'])) ?></span></td>
                                 <td><?= formatarPreco((float) $p['total']) ?></td>

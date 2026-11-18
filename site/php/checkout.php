@@ -16,11 +16,20 @@ $resultados = $cotacao['resultados'];
 $custo      = (float) $cotacao['total'];
 $faltantes  = (int) $cotacao['faltantes'];
 
+// Lucro aplicado peça a peça, nunca no total.
+$lucroPecas = 0.0;
+foreach ($resultados as $dados) {
+    if ($dados['melhor'] === null) continue;
+    $lucroPecas += lucroPecasCliente((float) $dados['melhor']['precoNum']);
+}
+$lucroPecas      = round($lucroPecas, 2);
+$totalPecasLucro = round($custo + $lucroPecas, 2);
+
 $tipo   = $modoSetup ? 'pc_completo' : 'peca';
 $taxa   = $modoSetup ? (float) $configPrecos['montagem_pc'] : 0.0;
 $frete  = $modoSetup ? (float) $configPrecos['frete_pc'] : 0.0;
-$total  = $modoSetup ? precoPcCliente($custo) : precoPecaCliente($custo);
-$lucro  = $total - $custo - $frete;
+$total  = round($totalPecasLucro + $taxa + $frete, 2);
+$lucro  = round($total - $custo - $frete, 2);
 
 $itens = [];
 foreach ($resultados as $chave => $dados) {
@@ -234,7 +243,7 @@ renderHead('Finalizar pedido');
 
                     <div class="resumo-linhas">
                         <?php if ($modoSetup): ?>
-                            <div class="resumo-linha"><span>Peças</span><span><?= formatarPreco($custo) ?></span></div>
+                            <div class="resumo-linha"><span>Peças</span><span><?= formatarPreco($totalPecasLucro) ?></span></div>
                             <div class="resumo-linha"><span>Montagem, testes e embalagem</span><span><?= formatarPreco($taxa) ?></span></div>
                             <div class="resumo-linha">
                                 <span>Frete</span>
@@ -250,7 +259,14 @@ renderHead('Finalizar pedido');
                     <?php if (ehAdmin()): ?>
                         <div class="resumo-admin">
                             <div class="resumo-linha"><span>Custo das peças</span><span><?= formatarPreco($custo) ?></span></div>
-                            <div class="resumo-linha"><span>Lucro bruto</span><span><?= formatarPreco($lucro) ?></span></div>
+                            <div class="resumo-linha">
+                                <span>Lucro das peças</span>
+                                <span><?= formatarPreco($lucroPecas) ?></span>
+                            </div>
+                            <?php if ($modoSetup): ?>
+                                <div class="resumo-linha"><span>Montagem</span><span><?= formatarPreco($taxa) ?></span></div>
+                            <?php endif; ?>
+                            <div class="resumo-linha"><span>Lucro bruto total</span><span><?= formatarPreco($lucro) ?></span></div>
                         </div>
                     <?php endif; ?>
 

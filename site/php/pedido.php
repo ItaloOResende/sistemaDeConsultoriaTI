@@ -61,6 +61,27 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' && $admin) {
 
 $itens = listarItensPedido($id);
 
+// Valor de venda das peças (custo + lucro) e lucro embutido nas peças.
+$valorPecasPedido = (float) $pedido['total'] - (float) $pedido['taxa_montagem'] - (float) $pedido['frete'];
+$lucroPecasPedido = $valorPecasPedido - (float) $pedido['custo_pecas'];
+
+// Distribui o lucro do pedido entre os itens, proporcionalmente ao custo de cada um.
+$custoTotalItens = 0.0;
+foreach ($itens as $item) {
+    $custoTotalItens += (float) $item['preco_custo'];
+}
+$detalhesLucroPedido = [];
+foreach ($itens as $item) {
+    $custoItem = (float) $item['preco_custo'];
+    $lucroItem = $custoTotalItens > 0 ? $lucroPecasPedido * ($custoItem / $custoTotalItens) : 0.0;
+    $detalhesLucroPedido[] = [
+        'rotulo' => $item['rotulo'],
+        'custo'  => $custoItem,
+        'lucro'  => round($lucroItem, 2),
+        'venda'  => round($custoItem + $lucroItem, 2),
+    ];
+}
+
 renderHead('Pedido #' . (int) $pedido['id']);
 ?>
 <main class="pagina-wrap">
@@ -68,8 +89,10 @@ renderHead('Pedido #' . (int) $pedido['id']);
         <div>
             <h1>Pedido #<?= (int) $pedido['id'] ?></h1>
             <p class="card-sub">
-                <?= date('d/m/Y', strtotime($pedido['criado_em'])) ?> às <?= date('H:i', strtotime($pedido['criado_em'])) ?>
-                · <?= $pedido['tipo'] === 'pc_completo' ? 'PC completo montado' : 'Peças avulsas' ?>
+                <?php if ($admin): ?>
+                    <?= date('d/m/Y', strtotime($pedido['criado_em'])) ?> às <?= date('H:i', strtotime($pedido['criado_em'])) ?> ·
+                <?php endif; ?>
+                <?= $pedido['tipo'] === 'pc_completo' ? 'PC completo montado' : 'Peças avulsas' ?>
             </p>
         </div>
         <div class="conta-acoes">
@@ -158,6 +181,22 @@ renderHead('Pedido #' . (int) $pedido['id']);
             <div class="resumo-linhas">
                 <?php if ($admin): ?>
                     <div class="resumo-linha"><span>Custo das peças</span><span><?= formatarPreco((float) $pedido['custo_pecas']) ?></span></div>
+                    <details class="lucro-detalhes" open>
+                        <summary>
+                            <span>Lucro das peças <span class="seta">▾</span></span>
+                            <span><?= formatarPreco($lucroPecasPedido) ?></span>
+                        </summary>
+                        <?php foreach ($detalhesLucroPedido as $det): ?>
+                            <div class="lucro-linha">
+                                <strong><?= e($det['rotulo']) ?></strong>
+                                <span>
+                                    custo <?= formatarPreco($det['custo']) ?>
+                                    · lucro <?= formatarPreco($det['lucro']) ?>
+                                    · venda <?= formatarPreco($det['venda']) ?>
+                                </span>
+                            </div>
+                        <?php endforeach; ?>
+                    </details>
                     <div class="resumo-linha"><span>Montagem</span><span><?= formatarPreco((float) $pedido['taxa_montagem']) ?></span></div>
                     <div class="resumo-linha">
                         <span>Frete</span>
@@ -167,7 +206,7 @@ renderHead('Pedido #' . (int) $pedido['id']);
                     <div class="resumo-linha resumo-lucro"><span>Lucro bruto</span><span><?= formatarPreco((float) $pedido['lucro']) ?></span></div>
                 <?php else: ?>
                     <?php if ($pedido['tipo'] === 'pc_completo'): ?>
-                        <div class="resumo-linha"><span>Peças</span><span><?= formatarPreco((float) $pedido['custo_pecas']) ?></span></div>
+                        <div class="resumo-linha"><span>Peças</span><span><?= formatarPreco($valorPecasPedido) ?></span></div>
                         <div class="resumo-linha"><span>Montagem, testes e embalagem</span><span><?= formatarPreco((float) $pedido['taxa_montagem']) ?></span></div>
                         <div class="resumo-linha">
                             <span>Frete</span>
