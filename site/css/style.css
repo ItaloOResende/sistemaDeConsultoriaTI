@@ -716,6 +716,14 @@ select:focus {
         gap: 0.5rem;
     }
 
+    .alternativa .alt-titulo {
+        white-space: normal;
+        overflow: visible;
+        text-overflow: unset;
+        overflow-wrap: anywhere;
+        width: 100%;
+    }
+
     .topbar-inner {
         padding: 0 1rem;
     }
