@@ -1,4 +1,8 @@
 <?php
+// BF-TEMP: site sem login até depois da Black Friday. Remover estas 2 linhas para restaurar.
+header('Location: index.php');
+exit;
+
 require __DIR__ . '/includes/layout.php';
 require __DIR__ . '/includes/db.php';
 

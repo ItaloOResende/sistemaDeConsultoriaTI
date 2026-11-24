@@ -41,7 +41,9 @@ $gabineteTipo = $entrada['gabinete_tipo'];
 $coolerTipo   = $entrada['cooler_tipo'];
 $coolerEstilo = $entrada['cooler_estilo'];
 
-$ehAdmin       = ehAdmin();
+// BF-TEMP: visual público como admin, sem login. Restaurar linha abaixo depois da Black Friday.
+// $ehAdmin       = ehAdmin();
+$ehAdmin       = true;
 $temResultado  = $totalSoma > 0 && !empty($resultadosPorPeca);
 $podeFinalizar = $temResultado && $pecasComFalta === 0;
 
@@ -82,6 +84,7 @@ $queryCompletarSetup['completar_setup'] = '1';
 $linkCompletarSetup = 'index.php?' . http_build_query($queryCompletarSetup) . '#resultados';
 
 $erroTerminal = '';
+$temBusca     = !empty($_GET); // BF-TEMP/mobile: esconde filtros após cotar no celular
 ?>
 <!DOCTYPE html>
 <html lang="pt-BR">
@@ -93,10 +96,12 @@ $erroTerminal = '';
     <meta name="theme-color" content="#0b1120">
     <title><?= htmlspecialchars($nomeSistema) ?> — Consultoria &amp; Cotação de Hardware</title>
 </head>
-<body>
+<body class="<?= $temBusca ? 'mobile-results' : 'mobile-filters' ?>">
 
 <!-- MENU FIXO -->
 <?php require __DIR__ . '/includes/topbar.php'; ?>
+
+<div class="mobile-filters-overlay" id="mobileFiltersOverlay"></div>
 
 <div class="dashboard-container">
     
@@ -108,27 +113,20 @@ $erroTerminal = '';
         </div>
 
         <form method="GET" action="index.php" id="formSidebar">
-            
-            <div class="perfil-box">
-                <span>Critério de Preço:</span>
-                <div class="radio-group">
-                    <label class="radio-label">
-                        <input type="radio" name="perfil_busca" value="barato" <?= $perfilBusca === 'barato' ? 'checked' : '' ?>>
-                        <span>💰 Economia</span>
-                    </label>
-                    <label class="radio-label">
-                        <input type="radio" name="perfil_busca" value="desempenho" <?= $perfilBusca === 'desempenho' ? 'checked' : '' ?>>
-                        <span>🚀 Desempenho</span>
-                    </label>
-                </div>
-            </div>
+
+            <button type="submit" class="btn-buscar" style="margin-bottom: 0.75rem;">Cotar Peças</button>
+
+            <label class="checkbox-container" style="margin-top: 0; margin-bottom: 1rem;">
+                <input type="checkbox" name="montar_setup" id="montarSetupCheckbox" value="1" <?= $modoSetup ? 'checked' : '' ?>>
+                <span>Montar Setup Completo</span>
+            </label>
 
             <div class="accordion-group">
                 
                 <!-- 1. Processador -->
                 <div class="accordion-item">
                     <button type="button" class="accordion-btn" onclick="toggleAccordion(this)">
-                        <span>🧠 Processador</span>
+                        <span>Processador</span>
                         <span class="seta">▼</span>
                     </button>
                     <div class="accordion-content">
@@ -157,7 +155,7 @@ $erroTerminal = '';
                 <!-- 2. Memória RAM -->
                 <div class="accordion-item">
                     <button type="button" class="accordion-btn" onclick="toggleAccordion(this)">
-                        <span>⚡ Memória RAM</span>
+                        <span>Memória RAM</span>
                         <span class="seta">▼</span>
                     </button>
                     <div class="accordion-content">
@@ -189,7 +187,7 @@ $erroTerminal = '';
                 <!-- 3. Armazenamento -->
                 <div class="accordion-item">
                     <button type="button" class="accordion-btn" onclick="toggleAccordion(this)">
-                        <span>💾 Armazenamento</span>
+                        <span>Armazenamento</span>
                         <span class="seta">▼</span>
                     </button>
                     <div class="accordion-content">
@@ -216,7 +214,7 @@ $erroTerminal = '';
                 <!-- 4. Placa de Vídeo -->
                 <div class="accordion-item">
                     <button type="button" class="accordion-btn" onclick="toggleAccordion(this)">
-                        <span>🎮 Placa de Vídeo</span>
+                        <span>Placa de Vídeo</span>
                         <span class="seta">▼</span>
                     </button>
                     <div class="accordion-content">
@@ -237,7 +235,7 @@ $erroTerminal = '';
                 <!-- 5. Outros Componentes -->
                 <div class="accordion-item">
                     <button type="button" class="accordion-btn" onclick="toggleAccordion(this)">
-                        <span>🔧 Outros Componentes</span>
+                        <span>Outros Componentes</span>
                         <span class="seta">▼</span>
                     </button>
                     <div class="accordion-content">
@@ -292,13 +290,6 @@ $erroTerminal = '';
                 </div>
 
             </div>
-
-            <label class="checkbox-container">
-                <input type="checkbox" name="montar_setup" id="montarSetupCheckbox" value="1" <?= $modoSetup ? 'checked' : '' ?>>
-                <span>Montar Setup Completo</span>
-            </label>
-
-            <button type="submit" class="btn-buscar">Cotar Peças</button>
         </form>
     </aside>
 
@@ -310,7 +301,9 @@ $erroTerminal = '';
         <?php endif; ?>
 
         <?php
+        // BF-TEMP: checkout/compra oculto até depois da Black Friday. Descomentar para restaurar.
         $acaoCheckoutHtml = '';
+        /*
         if ($temResultado) {
             if ($podeFinalizar) {
                 $acaoCheckoutHtml = '<a class="btn-primario btn-comprar" href="' . e($linkCheckout) . '">'
@@ -319,6 +312,7 @@ $erroTerminal = '';
                 $acaoCheckoutHtml = '<span class="checkout-nota checkout-nota-alerta">Ajuste os componentes sem oferta para finalizar.</span>';
             }
         }
+        */
 
         ?>
 
@@ -336,6 +330,7 @@ $erroTerminal = '';
                             <?php endif; ?>
                         </div>
                         <div class="resumo-linhas">
+                            <?php /* BF-TEMP: ocultar lucro/peças com lucro até depois da Black Friday. Descomentar bloco original abaixo.
                             <div class="resumo-linha"><span>Custo total das peças</span><span><?= formatarPreco($totalSoma) ?></span></div>
                             <details class="lucro-detalhes">
                                 <summary>
@@ -358,6 +353,8 @@ $erroTerminal = '';
                                 <div class="resumo-linha"><span>Montagem, testes e embalagem</span><span><?= formatarPreco($montagemCliente) ?></span></div>
                             <?php endif; ?>
                             <div class="resumo-linha resumo-total"><span>Total a cobrar</span><strong><?= formatarPreco($totalCliente) ?></strong></div>
+                            */ ?>
+                            <div class="resumo-linha resumo-total"><span>Total das peças</span><strong><?= formatarPreco($totalSoma) ?></strong></div>
                         </div>
                         <?php if ($acaoCheckoutHtml !== ''): ?>
                             <div class="summary-action summary-action-admin"><?= $acaoCheckoutHtml ?></div>
@@ -377,7 +374,7 @@ $erroTerminal = '';
                             <?php endif; ?>
                         </div>
                         <?php if ($modoSetup && $pecasComFalta > 0): ?>
-                            <div class="resumo-aviso">⚠ <?= $pecasComFalta ?> componente(s) sem oferta nos dados atuais. Fale com a gente para ajustar a configuração.</div>
+                            <div class="resumo-aviso"><?= $pecasComFalta ?> componente(s) sem oferta nos dados atuais. Fale com a gente para ajustar a configuração.</div>
                         <?php endif; ?>
                     <?php endif; ?>
                 </div>
@@ -410,22 +407,24 @@ $erroTerminal = '';
                     <?php if ($ehAdmin): ?>
                         <?php if ($dados['melhor'] !== null): $item = $dados['melhor']; ?>
                             <?php
-                            $precoCustoItem = (float) $item['precoNum'];
-                            $lucroItem      = lucroPecasCliente($precoCustoItem);
-                            $precoVendaItem = precoPecaCliente($precoCustoItem);
-                            $margemEfetivaItem = $precoCustoItem > 0 ? ($lucroItem / $precoCustoItem) * 100 : 0;
+                            // BF-TEMP: lucro por peça oculto até depois da Black Friday. Descomentar para restaurar.
+                            // $precoCustoItem = (float) $item['precoNum'];
+                            // $lucroItem      = lucroPecasCliente($precoCustoItem);
+                            // $precoVendaItem = precoPecaCliente($precoCustoItem);
+                            // $margemEfetivaItem = $precoCustoItem > 0 ? ($lucroItem / $precoCustoItem) * 100 : 0;
                             ?>
                             <a href="<?= htmlspecialchars($item['link']) ?>" target="_blank" rel="noopener" class="product-card destaque-menor">
                                 <div class="product-info">
                                     <div class="product-title"><?= htmlspecialchars($item['titulo']) ?></div>
-                                    <div class="product-price">Custo: <?= htmlspecialchars($item['precoTexto']) ?></div>
+                                    <div class="product-price"><?= htmlspecialchars($item['precoTexto']) ?></div>
+                                    <?php /* BF-TEMP: venda/lucro por peça oculto.
                                     <div class="admin-peca-venda">
                                         Venda: <strong><?= formatarPreco($precoVendaItem) ?></strong>
                                         <span>· lucro <?= formatarPreco($lucroItem) ?> (<?= number_format($margemEfetivaItem, 2, ',', '.') ?>%)</span>
                                     </div>
+                                    */ ?>
                                 </div>
                                 <div class="loja-badge <?= $item['loja']['tag_class'] ?>">
-                                    <span><?= $item['loja']['icone'] ?></span>
                                     <span><?= $item['loja']['nome'] ?></span>
                                 </div>
                             </a>
@@ -437,7 +436,7 @@ $erroTerminal = '';
                                         <a class="alternativa" href="<?= htmlspecialchars($alt['link']) ?>" target="_blank" rel="noopener">
                                             <span class="alt-titulo"><?= htmlspecialchars($alt['titulo']) ?></span>
                                             <span class="alt-preco"><?= htmlspecialchars($alt['precoTexto']) ?></span>
-                                            <span class="loja-badge <?= $alt['loja']['tag_class'] ?>"><?= $alt['loja']['icone'] ?> <?= $alt['loja']['nome'] ?></span>
+                                            <span class="loja-badge <?= $alt['loja']['tag_class'] ?>"><?= $alt['loja']['nome'] ?></span>
                                         </a>
                                     <?php endforeach; ?>
                                 </details>
@@ -457,7 +456,7 @@ $erroTerminal = '';
                     <?php else: ?>
                         <?php if ($dados['melhor'] !== null): $item = $dados['melhor']; ?>
                             <div class="cliente-peca">
-                                <span class="cliente-peca-check">✓</span>
+                                <span class="cliente-peca-check">OK</span>
                                 <span><?= htmlspecialchars($item['titulo']) ?></span>
                                 <span class="cliente-peca-preco"><?= formatarPreco(precoPecaCliente((float) $item['precoNum'])) ?></span>
                             </div>
@@ -803,6 +802,33 @@ document.querySelectorAll('.social-link').forEach(link => {
         setTimeout(() => { try { window.focus(); } catch (err) {} }, 80);
     });
 });
+
+// Mobile: após cotar, filtros viram gaveta lateral.
+(function () {
+    const toggle = document.getElementById('mobileFiltersToggle');
+    const sidebar = document.getElementById('cotar');
+    const overlay = document.getElementById('mobileFiltersOverlay');
+    if (!toggle || !sidebar || !overlay) return;
+
+    function abrir() {
+        sidebar.classList.add('open');
+        overlay.classList.add('open');
+        toggle.setAttribute('aria-expanded', 'true');
+        document.body.style.overflow = 'hidden';
+    }
+    function fechar() {
+        sidebar.classList.remove('open');
+        overlay.classList.remove('open');
+        toggle.setAttribute('aria-expanded', 'false');
+        document.body.style.overflow = '';
+    }
+
+    toggle.addEventListener('click', () => {
+        sidebar.classList.contains('open') ? fechar() : abrir();
+    });
+    overlay.addEventListener('click', fechar);
+    document.addEventListener('keydown', (e) => { if (e.key === 'Escape') fechar(); });
+})();
 </script>
 
 </body>

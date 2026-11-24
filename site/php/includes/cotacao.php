@@ -23,15 +23,15 @@ function identificarLoja($url)
 {
     $urlLower = strtolower($url);
     if (strpos($urlLower, 'kabum.com.br') !== false) {
-        return ['nome' => 'KaBuM!', 'tag_class' => 'loja-kabum', 'icone' => '🟧'];
+        return ['nome' => 'KaBuM!', 'tag_class' => 'loja-kabum', 'icone' => ''];
     } elseif (strpos($urlLower, 'amazon.com') !== false) {
-        return ['nome' => 'Amazon', 'tag_class' => 'loja-amazon', 'icone' => '📦'];
+        return ['nome' => 'Amazon', 'tag_class' => 'loja-amazon', 'icone' => ''];
     } elseif (strpos($urlLower, 'terabyteshop.com.br') !== false) {
-        return ['nome' => 'Terabyte', 'tag_class' => 'loja-terabyte', 'icone' => '⚡'];
+        return ['nome' => 'Terabyte', 'tag_class' => 'loja-terabyte', 'icone' => ''];
     } elseif (strpos($urlLower, 'pichau.com.br') !== false) {
-        return ['nome' => 'Pichau', 'tag_class' => 'loja-pichau', 'icone' => '🔴'];
+        return ['nome' => 'Pichau', 'tag_class' => 'loja-pichau', 'icone' => ''];
     }
-    return ['nome' => 'Loja Parceira', 'tag_class' => 'loja-padrao', 'icone' => '🛒'];
+    return ['nome' => 'Loja Parceira', 'tag_class' => 'loja-padrao', 'icone' => ''];
 }
 
 function chaveProduto($link, $titulo)
